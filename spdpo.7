@@ -1,0 +1,120 @@
+.TH SPDPO 1 "2018-04-12" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fBspdpo\fP \- Package creation automation tool
+.SH DESCRIPTION
+.PP
+\fBspdpo\fP is a shell script to automate the process of package creation. It produces
+\fBpkgng\fP packages.
+.SH OPERATION
+.PP
+\fBspdpo\fP operates in a clean chrooted enironment. If a package has dependencies, those dependencies are downloaded, built, and installed
+recursively.
+The process of package creation consists of the following steps (repeated for each defined edition):
+.TP
+\fB1. Preparing the environment\fP
+All the existing packages in the chroot sandbox are deinstalled. All the dependencies are looked for, downloaded, built, and installed recursively.
+.TP
+\fB2. Getting the sources\fP
+\fBspdpo\fP uses its companion tool \fBsrcdb\fP to obtain source distributions.
+.TP
+\fB3. Unpacking\fP
+Currently the following formats are supported: \fBgz\fP, \fBbz2\fP, \fBxz\fP, and \fBzip\fP. Underlying OS may lack support
+tools for some archive formats (i.e. \fBzip\fP). If this is the case, either re-archiving with the supported format or installing
+necessary tool is needed. 
+.TP
+\fB4. Trimming\fP
+Sometimes it is necessary to make small modifications to the sources, such as rename or create
+some files or directories and patching is not applicable. Some packages require special users or groups to be present in the system
+in order to build and install.
+.TP
+\fB5. Patching\fP
+If patches for the sources are found, they are applied (see below).
+.TP
+\fB6. Configuring\fP
+Prepare the sources to build on this particular system. Usually some coniguration procedure is
+supplied with the source distribution (e.g. \fBautotools\fP or \fBcmake\fP). If not, the configuration instructions
+may be provided by the user during the \fBTrimming\fP or \fBPatching\fP step.
+.TP
+\fB7. Building\fP
+Build the sources. The build instructions are often supplied with the source
+distribution (e.g. Makefile). If not, the build instructions are provided by the user during the \fBTrimming\fP or \fBPatching\fP step.
+.TP
+\fB8. Installing\fP
+Install built software for each sub-package. Steps 8-10 are repeated for each sub-package.
+.TP
+\fB9. Postprocessing\fP
+Some files or directories may need to be deleted or altered. This comes handy when the user finds out that two packages
+install some of their files into the same place (which is not a problem during package creation, but makes it impossible
+to install afterwards). This is also how subpackages are shaped.
+.TP
+\fB10. Sub-package creation\fP
+Create filelistis and use them to create sub-packages. When a file is legitimately contained in many packages, it is renamed in order not to cause collisions.
+.TP
+\fB11. Package filelist creation\fP
+Since we never use the main package, only a filelist is created and stored for it. This filelist is referred to by the user when selecting files for sub-packages.
+.TP
+\fB12. Cleaning Up\fP
+Remove the build directory as well as the root installation directory of the package.
+.TP
+\fB13. Restoring the environment\fP
+Remove the installed dependencies for the built package.
+.SH EDITIONS
+A lot of packages can be built using various compilers (e.g. \fBgcc\fP or \fBllvm\fP). The resulting packages are of different \fBeditions\fP. Each edition
+implies its own chrooted build environment. At least one is mandatory.
+.SH PATCHES
+Patches have the same name as the package (optionally suffixed with edition tag, like \fB-gcc\fP) with the \fB.diff\fP or \fB.diffN\fP extension appended, where
+\fBN\fP is some successive non-negative number starting at 0.
+The patches are created by the user and are kept along with the specification files. 
+The \fB.diff\fP file is applied first, then the \fB.diffN\fP
+files until the first gap or end of sequence. Each patch should contain a well-defined set of changes.
+Creation of interdependent patches is strongly discouraged. 
+.SH FILES AND DIRECTORIES
+\fBspdpo\fP installs the following files and directories:
+.TP
+.B /usr/share/spdpo/
+Specification file sets and patches are expected to be in subdirectories of this folder. The subdirectories are named after the \fBflavours\fP and are
+referred to with the \fB-f\fP option. This directory is backed up and restored by the \fB-b\fP and \fB-i\fP options.
+.TP
+.B /usr/share/spdpo/\fIflavour\fP/bundles/
+Specification files for a given \fIflavour\fP are expected to be in a dubdirectory of this directory.
+.TP
+.B /usr/share/spdpo/\fIflavour\fP/patches/
+Patches for a given \fIflavour\fP are expected to be in this directory.
+.TP
+.B /usr/share/spdpo/\fIflavour\fP/config
+This file contains settings common to all the specification files in the set.
+.TP
+.B /var/chroot/spdpo-\fIedition\fP/var/spool/spdpo/build/
+Sources are extracted to this directory. Actions defined by the \fBTRIM_N\fP variables, are carried out relative to this directory.
+.TP
+.B /var/chroot/spdpo-\fIedition\fP/var/spool/spdpo/destdir/
+After building the package is installed to this directory in the subdirectory named after the package. Actions defined by the \fBPOSTPROCESS_N\fP
+variables, are carried out relative to the corresponding subdirectory of this folder.
+.TP
+.B /var/chroot/spdpo-\fIedition\fP/var/spool/spdpo/pkg/
+Created sub-packages are placed into this folder.
+.TP
+.B /var/chroot/spdpo-\fIedition\fP/var/spool/spdpo/filelists/
+Filelists the main packages are placed into this folder.
+.TP
+.B /var/chroot/spdpo-\fIedition\fP/var/tmp/spdpo/non-pkg/
+Some source packages do not need any processing (e.g. PEAR modules). Such packages are copied verbatim to this folder.
+.TP
+.B /var/log/spdpo.log
+A brief account of the building process when building dependencies can be found here. Syslog may not be available, so logging to file.
+.SH GOTCHAS
+When creating specification files the user should pay special attention to the use of single or double quotes. They determine
+when the variables or backquote expressions which might be included between them are eveluated. Sometimes such variables and
+expressions cannot be evaluated correctly when the specification file containing them is included into the main ececutable.
+.SH SEE ALSO
+\fBspdpo\fP(\fB1\fP)
+\fBspdpo.conf\fP(\fB5\fP)
+\fBspdpo-split\fP(\fB1\fP)
+\fBsrcdb\fP(\fB1\fP)
+\fBimagefactory\fP(\fB1\fP)
+.SH BUGS
+Send bug reports to <aavzz@yandex.ru>
+.SH AUTHOR
+Alex Zimnitsky

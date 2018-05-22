@@ -1,0 +1,11 @@
+To install:
+
+./configure
+make
+make install
+
+
+Documentation:
+
+man spdpo
+man srcdb

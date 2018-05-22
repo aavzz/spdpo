@@ -1,0 +1,1207 @@
+#!/bin/sh
+
+
+#/////////////////////////////////////////////////////////////////////////////
+#
+# Subroutines
+#
+#/////////////////////////////////////////////////////////////////////////////
+
+
+usage() {
+    echo "usage: spdpo [-d] -f flavour package_name"
+    echo "       spdpo [-d] -f flavour -a"
+    echo "       spdpo -h -f flavour package_name"
+    echo "       spdpo -t flavour"
+    echo "       spdpo -b"
+    echo "       spdpo -e edition"
+    echo "       spdpo -i file"
+    echo "       spdpo -i URL"
+    echo "       spdpo -B"
+    echo "       spdpo -D"
+    exit 1
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+
+build_C() {
+
+    if [ x$VIRTUAL = xNO ];then
+        if [ "x$HELP" = "x1" ];then
+            chroot ${CHROOT}-${_ed} sh -c "$BDIR/$NAME-$VER/$CONFSUBDIR/$CONFIG --help" | less
+            exit 0
+        fi
+        if [ "x$CONFIG" != "x" ];then
+            chroot ${CHROOT}-${_ed} sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && $CONFIG $CONFIG_STR\""
+            [ $? != 0 ] && exit 1
+            echo -e "${_y}//////// $NAME-$VER-$_ed: configured, ready to build${_n}"
+            [ $DEBUG = 1 ] && read N
+        fi
+        chroot ${CHROOT}-${_ed} sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $MAKETARGET\""
+        [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+        echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+        [ $DEBUG = 1 ] && read N
+    fi
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    if [ "x$INSTALLPREFIX_NAME" != "x" ];then
+        chroot ${CHROOT}-${_ed} sh -c "mkdir -p /$PYTHONPATH"
+        chroot ${CHROOT}-${_ed} sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && env PYTHONPATH=$PYTHONPATH $MAKE $INSTALLPREFIX_NAME=$DDIR/$NAME-$VER $INSTALLTARGET"
+    else
+        chroot ${CHROOT}-${_ed} sh -c "mkdir -p /$PYTHONPATH"
+        chroot ${CHROOT}-${_ed} sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && env PYTHONPATH=$PYTHONPATH $MAKE $INSTALLTARGET"
+    fi
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////////
+
+
+build_CMAKE() {
+
+    if [ x$HELP = x1 ];then
+        chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && cmake $BDIR/$NAME-$VER/$CONFSUBDIR -LAH" | less
+        exit 0
+    fi
+    if [ x"$BUILDUSER" != "x" ];then
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && cmake $BDIR/$NAME-$VER/$CONFSUBDIR $CONFIG_STR\""
+    else
+        chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && cmake $BDIR/$NAME-$VER/$CONFSUBDIR $CONFIG_STR"
+    fi
+    [ $? != 0 ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: configured, ready to build${_n}"
+    [ $DEBUG = 1 ] && read N
+    if [ x"$BUILDUSER" != "x" ];then
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $MAKETARGET\""
+    else
+        chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $MAKETARGET"
+    fi
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        if [ x$INSTALLPREFIX_NAME != x ];then
+            spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+        else
+            spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+        fi
+    done
+
+    if [ x$INSTALLPREFIX_NAME != x ];then
+        chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $INSTALLPREFIX_NAME=$DDIR/$NAME-$VER $INSTALLTARGET"
+    else
+        chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $INSTALLTARGET"
+    fi
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#///////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_PERL() {
+    if [ x$HELP = x1 ];then
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && perl $BDIR/$NAME-$VER/$CONFSUBDIR/Makefile.PL --help\"" | less
+        exit 0
+    fi
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && perl $BDIR/$NAME-$VER/$CONFSUBDIR/Makefile.PL $CONFIG_STR\""
+    [ $? != 0 ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: configured, ready to build${_n}"
+    [ $DEBUG = 1 ] && read N
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $MAKETARGET\""
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && $MAKE $INSTALLPREFIX_NAME=$DDIR/$NAME-$VER $INSTALLTARGET"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#///////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_PERLB() {
+    if [ x$HELP = x1 ];then
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && perl $BDIR/$NAME-$VER/$CONFSUBDIR/Build.PL --help\"" | less
+        exit 0
+    fi
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && perl $BDIR/$NAME-$VER/$CONFSUBDIR/Build.PL $CONFIG_STR\""
+    [ $? != 0 ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: configured, ready to build${_n}"
+    [ $DEBUG = 1 ] && read N
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && $BDIR/$NAME-$VER/$CONFSUBDIR/Build\""
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && $BDIR/$NAME-$VER/$CONFSUBDIR/Build install --destdir $DDIR/$NAME-$VER"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_PYTHON() {
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && python $BDIR/$NAME-$VER/$CONFSUBDIR/setup.py build $CONFIG_STR\""
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    mkdir -p /$PYTHONPATH
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && env PYTHONPATH=$PYTHONPATH python $BDIR/$NAME-$VER/$CONFSUBDIR/setup.py install $PYTHON_INSTALLARG --root=$DDIR/$NAME-$VER"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_PYTHON3() {
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$BUILDDIR && python3 $BDIR/$NAME-$VER/$CONFSUBDIR/setup.py build $CONFIG_STR\""
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    mkdir -p /$PYTHONPATH
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && env PYTHONPATH=$PYTHONPATH python3 $BDIR/$NAME-$VER/$CONFSUBDIR/setup.py install $PYTHON_INSTALLARG --root=$DDIR/$NAME-$VER"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_GO() {
+
+    [ x$GONAME = x ] && GONAME=$NAME
+
+    for i in $GODEPS
+    do
+
+        _FILE=`find $BUNDLEDIR/.. -name $i -type f`
+        if [ x$_FILE = x ];then           
+            echo -e "${_r}//////// Specification file $i not found , exitting${_n}"
+            exit 1    
+        fi    
+
+        [ x$i = x ] || GDN=`grep "^\s*NAME=" $_FILE | head -n 1|sed -e s/^\s*NAME=//`
+        [ x$i = x ] || GDV=`grep "^\s*VER=" $_FILE | head -n 1|sed -e s/^\s*VER=//`
+        [ x$i = x ] || GDGOBUILDPATH=`grep "^\s*GOBUILDPATH=" $_FILE | head -n 1|sed -e s/^\s*GOBUILDPATH=//`
+        [ x$i = x ] || GDGONAME=`grep "^\s*GONAME=" $_FILE | head -n 1|sed -e s/^\s*GONAME=//`
+        [ x$GDGONAME = x ] && GDGONAME=$GDN
+        GODEPSRCNAME=`srcdb -o info -n $GDN -v $GDV`
+
+        if [ ! -f "$GODEPSRCNAME" ];then
+            echo -e "${_y}//////// $GDN-$GDV-$_ed: source package for $GDN-$GDV not found, trying to download${_n}"
+            [ $DEBUG = 1 ] && read N
+            srcdb -o download -n $GDN -v $GDV
+            GODEPSRCNAME=`srcdb -o info -n $GDN -v $GDV`
+
+            if [ ! -f "$GODEPSRCNAME" ];then
+                echo -e "${_r}//////// Download failed!${_n}"
+                exit 1;
+            fi
+            echo -e "${_y}//////// $GDN-$GDV-$_ed: source package for $GDN-$GDV downloaded sucessfully${_n}"
+            [ $DEBUG = 1 ] && read N
+        fi
+
+        GODEPTYPE=`file $GODEPSRCNAME | awk '{ print $2}' `
+
+        case $GODEPTYPE in
+            gzip)
+                su $BUILDUSER -c "zcat $GODEPSRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            bzip2)
+                su $BUILDUSER -c "bzcat $$GODEPSRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            xz|XZ)
+                su $BUILDUSER -c "xzcat $GODEPSRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            Zip)
+                su $BUILDUSER -c "cd ${CHROOT}-$_ed/${BDIR} && unzip -oq $GODEPSRCNAME " || exit 1
+            ;;  
+            *)
+                echo -e "${_r}//////// Unrecognized compression format (GODEP), exitting${_n}"
+                exit 1
+            ;;
+        esac;
+
+
+    done
+
+    i=0
+    while : ;
+    do
+        eval _cmd=\"\$GODEPSTRIM_${i}\"
+
+        if [ -n "$_cmd" ];then
+            chroot ${CHROOT}-$_ed sh -c "$_cmd"
+            i=$(expr $i + 1)
+        else
+            break
+        fi
+    done
+
+    for i in $GODEPS
+    do
+
+        _FILE=`find $BUNDLEDIR/.. -name $i -type f`
+        if [ x$_FILE = x ];then
+            echo -e "${_r}//////// Specification file $i not found , exitting${_n}"
+            exit 1
+        fi
+
+        [ x$i = x ] || GDN=`grep "^\s*NAME=" $_FILE | head -n 1|sed -e s/^\s*NAME=//`
+        [ x$i = x ] || GDV=`grep "^\s*VER=" $_FILE | head -n 1|sed -e s/^\s*VER=//`
+        [ x$i = x ] || GDGOBUILDPATH=`grep "^\s*GOBUILDPATH=" $_FILE | head -n 1|sed -e s/^\s*GOBUILDPATH=//`
+        [ x$i = x ] || GDGONAME=`grep "^\s*GONAME=" $_FILE | head -n 1|sed -e s/^\s*GONAME=//`
+        [ x$GDGONAME = x ] && GDGONAME=$GDN
+
+        #///// Patch
+
+        if [ -f $PATCHDIR/$GDN-$GDV.diff  ];then
+            cd ${CHROOT}-$_ed/$BDIR/$GDGONAME-$GDV && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$GDN-$GDV.diff"
+            echo -e "${_y}//////// $GDN-$GDV-$_ed: patch applied${_n}"
+            [ $DEBUG = 1 ] && read N
+        fi
+
+        i=0
+        while : ;
+        do
+            if [ -f $PATCHDIR/$GDN-$GDV.diff_${i}  ];then
+                cd ${CHROOT}-$_ed/$BDIR/$GDGONAME-$GDV && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$GDN-$GDV.diff_${i}"
+                echo -e "${_y}//////// $GDN-$GDV-$_ed: patch #${i} applied${_n}"
+                [ $DEBUG = 1 ] && read N
+                i=$(expr $i + 1)
+            else
+                break
+            fi
+        done
+
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"mkdir -p $BDIR/src/$GDGOBUILDPATH/$GDGONAME\""
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cp -Rp $BDIR/$GDGONAME-$GDV/* $BDIR/src/$GDGOBUILDPATH/$GDGONAME\""
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"rm -r $BDIR/$GDGONAME-$GDV\""
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"mkdir -p $BDIR/src/$GOBUILDPATH/$GONAME\""
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cp -Rp $BDIR/$NAME-$VER/* $BDIR/$NAME-$VER/.[a-z]* $BDIR/src/$GOBUILDPATH/$GONAME\""
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"rm -r $BDIR/$NAME-$VER\""
+
+    if [ "x$GOTARGETS" != x ];then 
+        for i in $GOTARGETS
+        do
+            chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"env GOPATH=$BDIR go get -v $GOBUILDPATH/$i\""
+        done
+    else
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/src/$GOBUILDPATH && env GOPATH=$BDIR go get -v ./...\""
+    fi
+
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        #spdpo-subpackage $DBG -f $FLAVOUR -n $PN -v $VER -b GO -e $_ed
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -v $VER -e $_ed
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "mkdir -p $DDIR/$NAME-$VER/usr/lib/go-$GOVER"
+    chroot ${CHROOT}-$_ed sh -c "[ -d $BDIR/bin ] && cp -Rp $BDIR/bin $DDIR/$NAME-$VER/usr"
+    chroot ${CHROOT}-$_ed sh -c "[ -d $BDIR/pkg ] && cp -Rp $BDIR/pkg $DDIR/$NAME-$VER/usr/lib/go-$GOVER"
+    chroot ${CHROOT}-$_ed sh -c "cp -Rp $BDIR/src $DDIR/$NAME-$VER/usr/lib/go-$GOVER"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+#////////////////////////////////////////////////////////////////////////////////////////////////////
+ 
+build_NODEJS() {
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "mkdir -p $DDIR/$NAME-$VER/usr"
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$BUILDDIR && npm install -g --production --prefix $DDIR/$NAME-$VER/usr"
+    #chroot ${CHROOT}-$_ed sh -c "rm $DDIR/$NAME-$VER/usr/lib/node_modules/$NAME"
+    #chroot ${CHROOT}-$_ed sh -c "cp -Rp $BDIR/$NAME-$VER $DDIR/$NAME-$VER/usr/lib/node_modules/$NAME"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+#////////////////////////////////////////////////////////////////////////////////////////////////////
+ 
+build_CUSTOM() {
+
+    i=0
+    while : ;
+    do
+        eval _cmd=\"\$BUILD_${i}\"
+        
+        if [ -n "$_cmd" ];then
+            chroot ${CHROOT}-$_ed sh -c "$_cmd"
+            [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+            i=$(expr $i + 1)
+        else
+            break
+        fi
+    done
+
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    i=0
+    while : ;
+    do
+        eval _cmd=\"\$INSTALL_${i}\"
+        
+        if [ -n "$_cmd" ];then
+            chroot ${CHROOT}-$_ed sh -c "$_cmd"
+            [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+            i=$(expr $i + 1)
+        else
+            break
+        fi
+    done
+
+}
+
+#////////////////////////////////////////////////////////////////////////////////////////////////////
+
+build_PEAR() {
+    cp $SRCNAME ${CHROOT}-$_ed/$NPDIR
+    echo -e "${_y}//////// $SRCNAME: placed in $NPDIR${_n}"
+    [ $DEBUG = 1 ] && read  N
+    exit 0
+}
+
+
+#////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+build_SCONS() {
+    if [ x$HELP = x1 ];then
+        chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$CONFSUBDIR && /usr/bin/scons --help\"" | less
+        exit 0
+    fi
+    chroot ${CHROOT}-$_ed sh -c "su $BUILDUSER -c \"cd $BDIR/$NAME-$VER/$CONFSUBDIR && /usr/bin/scons $MAKETARGET\""
+    [ $? != 0 -a x$IGNOREBUILDERROR != "x1" ] && exit 1
+    echo -e "${_y}//////// $NAME-$VER-$_ed: built, ready to install${_n}"
+    [ $DEBUG = 1 ] && read N
+
+    for i in $SUBPKGS
+    do
+        PN=`grep "^\s*NAME=" $i | head -n 1|sed -e s/^\s*NAME=//`
+        echo -e "${_y}//////// $NAME-$VER-$_ed: installing for subpackage $PN${_n}"
+        [ $DEBUG = 1 ] && read N
+        [ $DEBUG = 1 ] && DBG="-d"
+        spdpo-subpackage $DBG -f $FLAVOUR -n $PN -e $_ed
+    done
+
+    chroot ${CHROOT}-$_ed sh -c "cd $BDIR/$NAME-$VER/$CONFSUBDIR && /usr/bin/scons $INSTALLTARGET"
+    [ $? != 0 -a x$IGNOREINSTALLERROR != "x1" ] && exit 1
+
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////////
+#
+# Subroutines end
+#
+#/////////////////////////////////////////////////////////////////////////////////
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+#/////////////////////////////////////////////////////////////////////////////////
+#
+# Check arguments
+#
+#/////////////////////////////////////////////////////////////////////////////////
+
+
+DEBUG=0
+FLAVOUR="."
+PKGNAME="."
+
+if [ $# -eq 0 ];then
+    usage
+else
+    while [ $# -gt 0 ];
+    do
+        case $1 in
+            -a)
+                BUILDALL=1
+            ;;
+            -d)
+                DEBUG=1
+            ;;
+            -e)
+                [ x$MODE != x ] && usage
+                MODE=edition
+                shift
+                EDITION=$1
+            ;;
+            -f)
+                [ x$MODE != x ] && usage
+                MODE=build 
+                shift
+                FLAVOUR=$1
+            ;;
+            -t)
+                [ x$MODE != x ] && usage
+                MODE=gettop 
+                shift
+                FLAVOUR=$1
+            ;;
+            -h)
+                HELP=1
+            ;;
+            -b)
+                [ x$MODE != x ] && usage
+                MODE=backupdb
+            ;;
+            -i)
+                [ x$MODE != x ] && usage
+                MODE=installdb 
+                shift
+                TARGET=$1
+            ;;
+            -B)
+                [ x$MODE != x ] && usage
+                MODE=cleanupbdir
+            ;;
+            -D)
+                [ x$MODE != x ] && usage
+                MODE=cleanupddir
+            ;;
+            *)
+                OPKGNAME=$1
+                PKGNAME=`echo $1 | awk -F :: '{print $1}'`
+                
+                #preliminary include
+                . /etc/spdpo.conf
+                _INC=`cd $BUNDLEDIR/.. && find . -name $PKGNAME -type f`
+                INCLUDE=`dirname $_INC`
+
+                break
+            ;;
+        esac
+        shift
+    done
+fi
+
+# we depend on FLAVOUR
+
+. /etc/spdpo.conf
+
+[ -f $_CFILE ] && . $_CFILE
+
+
+
+#//////////////////////////////////////////////////////////////////////////////
+#
+# If we need to backup or restore build instructions do it now and exit
+#
+#//////////////////////////////////////////////////////////////////////////////
+
+
+if [ x$MODE = xbackupdb ];then
+
+    echo -e "${_y}//////// Backing up db from ${AMMOPREFIX}${_n}"
+    tar -cf - -C ${AMMOPREFIX}/.. spdpo | xz > spdpo-ammo-`date "+%Y%m%d%H%M%S"`.tar.xz
+    exit 0
+
+elif [ x$MODE = xedition ];then
+
+    for i in build destdir pkg filelist non-pkg
+    do
+        mkdir -p /var/chroot/spdpo-${EDITION}/var/spool/spdpo/${i}
+    done
+    exit 0
+
+elif [ x$MODE = xcleanupbdir ];then
+
+    for i in ${CHROOT}-*
+    do
+        rm -r $i/$BDIR/*
+    done
+    exit 0
+
+elif [ x$MODE = xcleanupddir ];then
+
+    for i in ${CHROOT}-*
+    do
+        chflags -R noschg $i/$DDIR
+        rm -r $i/$DDIR/*
+    done
+    exit 0
+
+elif [ x$MODE = xinstalldb ];then
+
+    mkdir -p /var/tmp
+            
+    if [ -z ${TARGET} ];then
+        echo -e "${_y}//////// Filename or URL not specified${_n}"
+        exit 1
+    fi
+
+    if [ -d ${AMMOPREFIX} ];then
+        echo -e "${_y}//////// SPDPO detected in ${AMMOPREFIX}, aborting${_n}"
+        exit 1
+    fi
+
+    echo ${TARGET} | grep "^http://\|^ftp://\|^https://" > /dev/null
+
+    if [ $? = 0 ]; then
+
+        echo -e "${_y}//////// Downloading ${TARGET}${_n}"
+        if [ -f /usr/bin/fetch ];then
+            /usr/bin/fetch $FETCHOPTS -o /var/tmp/spdpo-ammo.tar.xz ${TARGET}
+        elif [ -f /usr/bin/wget ];then
+            /usr/bin/wget --no-check-certificate -O /var/tmp/spdpo-ammo.tar.xz ${TARGET}
+        fi
+        if [ $? != "0" ];then
+            echo -e "${_r}//////// Failure${_n}"
+            exit 1
+        fi
+
+        echo -e "${_y}//////// Installing db to ${AMMOPREFIX}${_n}"
+        xzcat /var/tmp/spdpo-ammo.tar.xz | tar -x -C `dirname ${AMMOPREFIX}` -f -
+        rm /var/tmp/spdpo-ammo.tar.xz
+
+    elif [ -f ${TARGET} ];then
+        echo -e "${_y}//////// Installing db to ${AMMOPREFIX}${_n}"
+        xzcat ${TARGET} | tar -x -C `dirname ${AMMOPREFIX}` -f -
+    else
+        echo -e "${_r}//////// ${TARGET} not found${_n}"
+        exit 1
+    fi
+    
+    exit 0
+
+elif [ x$MODE = xgettop ];then
+
+    D2=
+
+    for i in $SPECPREFIX
+    do
+        BTARGETS=`ls $WDIR/$i* 2>/dev/null | grep -v ::`
+        for j in $BTARGETS
+        do
+
+            . $j
+ 
+            for d1 in $DEPS
+            do 
+                d=`echo $d1 | awk -F :: '{print $1}'`
+                found=0
+                for d2 in $D2
+                do 
+                    if [ $d = $d2 ];then
+                        found=1
+                    fi
+                done
+                if [ $found = 0 ];then
+                    D2="$D2 $d"
+                fi
+            done
+        done 
+    done        
+
+    for i in $SPECPREFIX
+    do
+        BTARGETS=`ls $WDIR/$i* 2>/dev/null | grep -v ::`
+        for j in $BTARGETS
+        do
+            found=0
+            N1=`basename $j`
+            for k in $D2
+            do
+                if [ $k = $N1 ];then
+                    found=1
+                fi
+            done
+            if [ $found = 0 ];then
+                echo "$N1"
+            fi
+        done
+    done
+
+    exit 0
+
+elif [ x$MODE = x ];then
+    usage
+fi
+
+
+#///////////////////////////////////////////////////////////////////////////////////
+#
+# Include necessary configuration files 
+#
+#///////////////////////////////////////////////////////////////////////////////////
+
+if [ -f $WDIR/$PKGNAME ];then
+
+    OLD_CONFIG_STR=$CONFIG_STR
+    IGNORE=NO
+
+    . $WDIR/$PKGNAME
+
+    if [ "x$BUILDTYPE" = xPERL -o "x$BUILDTYPE" = xPERLB -o "x$BUILDTYPE" = xPYTHON ];then
+
+        if [ "x$OLD_CONFIG_STR" = "x$CONFIG_STR" ];then
+            CONFIG_STR=
+        fi
+    elif [ "x$BUILDTYPE" = xCMAKE ];then
+
+        if [ "x$OLD_CONFIG_STR" = "x$CONFIG_STR" ];then
+            CONFIG_STR="-DCMAKE_INSTALL_PREFIX=/usr -Wno-dev"
+        fi
+    fi
+    [ "x$BUILDDIR" = "x" ] && BUILDDIR=$CONFSUBDIR
+
+else
+    echo -e "${_r}File not found $WDIR/$PKGNAME${_n}"
+    exit 1
+fi
+
+
+for _ed in $EDITIONS
+do
+
+if [ x$IGNORE != "xNO" ];then
+    echo -e "${_y}//////// Not building $NAME-$VER-$_ed${_n}"
+    exit 0
+fi
+
+eval _cfg=\"\$DEPS_${_ed}\"
+[ "x$_cfg" != x ] && DEPS="$_cfg"
+eval _cfg=\"\$CONFIG_STR_${_ed}\"
+[ "x$_cfg" != x ] && CONFIG_STR="$_cfg"
+eval _cfg=\"\$CFLAGS_${_ed}\"
+[ "x$_cfg" != x ] && CFLAGS="$_cfg"
+eval _cfg=\"\$CXXFLAGS_${_ed}\"
+[ "x$_cfg" != x ] && CXXFLAGS="$_cfg"
+eval _cfg=\"\$LDFLAGS_${_ed}\"
+[ "x$_cfg" != x ] && LDFLAGS="$_cfg"
+eval _cfg=\"\$LIBS_${_ed}\"
+[ "x$_cfg" != x ] && LIBS="$_cfg"
+
+SUBPKGS=`ls $WDIR/${NAME}::*`
+
+for i in `chroot ${CHROOT}-$_ed sh -c "pkg info" | awk '{ print $1 }'`
+do
+    j=`chroot ${CHROOT}-$_ed sh -c "pkg info $i" | grep -E "Name +:" | awk '{ print $3 }'`
+    chroot ${CHROOT}-$_ed sh -c "pkg delete -yf $j >/dev/null 2>&1"
+    UPKGS="$UPKGS $j"
+done
+    
+if [ "x$UPKGS" != "x" ];then
+    echo -e "${_y}//////// $NAME-$VER-$_ed${_n}"
+    echo -e "${_b}"
+    echo $UPKGS
+    echo -e "${_n}"
+    echo -e "${_y}//////// uninstalled to create clean build environment${_n}"
+    if [ "$DEBUG" = "1" ];then
+        read N
+    fi
+fi
+
+if [ "x$VIRTUAL" = "xNO" ];then 
+    echo -e "${_y}//////// $NAME-$VER-$_ed: building${_n}" 
+    if [ "$DEBUG" = "1" ];then
+        read N
+    fi
+
+
+#///////////////////////////////////////////////////////////////////////////
+#
+# Get the sources
+#
+# All extraction software must pe present
+# We download sources before loading dependencies in order to be able
+# to use them in depandency building (Go software absolutely depends on this)
+#
+#///////////////////////////////////////////////////////////////////////////
+
+    SRCNAME=`srcdb -o info -n $NAME -v $VER`
+
+    if [ ! -f "$SRCNAME" ];then
+        echo -e "${_y}//////// $NAME-$VER-$_ed: source package for $NAME-$VER not found, trying to download${_n}"
+        [ $DEBUG = 1 ] && read N
+        srcdb -o download -n $NAME -v $VER
+        SRCNAME=`srcdb -o info -n $NAME -v $VER`
+
+        if [ ! -f "$SRCNAME" ];then
+            echo -e "${_r}//////// Download failed!${_n}"
+            exit 1;
+        fi
+        echo -e "${_y}//////// $NAME-$VER-$_ed: source package for $NAME-$VER downloaded sucessfully${_n}"
+        [ $DEBUG = 1 ] && read N
+    fi
+fi
+
+
+#//////////////////////////////////////////////////////////////////////////////
+#
+# install all dependencies
+# if non-existent try to build them
+# do not remember what is being installed, since we started
+# in a clean environment and must uninstall everything after we are done
+#
+# to save time we try to build everything before installing anything
+#
+#//////////////////////////////////////////////////////////////////////////////
+
+
+#/////  Build if not found
+
+_indent="$_indent  "
+export _indent
+
+for i in $DEPS
+do
+
+    RPN=`echo $i | awk -F :: '{print $1}'`
+    _FILE=`find $BUNDLEDIR/.. -name $RPN -type f`
+    if [ x$_FILE != x ];then
+        j=`grep "^VER=" $_FILE | head -n 1|sed -e s/VER=//`
+    else
+        echo -e "${_r}//////// Specification file $RPN not found , exitting${_n}"
+        exit 1
+    fi
+
+    _edition=`echo $i | awk -F / '{print $2}'`
+
+    [ x$_edition = x ] && _edition=$_ed
+
+    if [ -e ${CHROOT}-$_ed/$PDIR/$i-$j-$_edition-$FLAVOUR-$ARCH.txz ]; then
+        echo -e "${_y}//////// $NAME-$VER-$_ed: dependency $i-$j-$_edition found${_n}"
+        [ $DEBUG = 1 ] && read N 
+    else
+        echo -e "${_y}//////// $NAME-$VER-$_ed: dependency $i-$j-$_edition not found, trying to build${_n}"
+        [ $DEBUG = 1 ] && read N
+
+        A=
+        [ $DEBUG = 1 ] && A=" -d"
+
+        echo "${_indent}building dependency of $NAME-$VER-$_ed: `basename $i` ($FLAVOUR-$ARCH)" >> /var/log/spdpo.log
+        spdpo $A -f $FLAVOUR $i 
+        if [ $? != 0 ];then
+            echo -e "${_r}//////// $i build error, exitting${_n}"
+            exit 1
+        else
+            echo "${_indent}finished building `basename $i` ($FLAVOUR-$ARCH)" >> /var/log/spdpo.log
+            echo -e "${_y}//////// $NAME-$VER-$_ed: dependency $i-$j-$_edition was built successfully${_n}"
+            [ $DEBUG = 1 ] && read N
+        fi
+    fi
+done
+
+__START__=`date`
+
+#/////  Try to install
+
+if [ "x$VIRTUAL" = "xNO" ];then 
+    for i in $DEPS
+    do
+        RPN=`echo $i | awk -F :: '{print $1}'`
+        _FILE=`find $BUNDLEDIR/.. -name $RPN -type f`
+        j=`grep "^VER=" $_FILE | head -n 1|sed -e s/VER=//`
+        _edition=`echo $i | awk -F / '{print $2}'`
+        [ x$_edition = x ] && _edition=$_ed
+
+        if [ -e ${CHROOT}-$_edition/$PDIR/$i-$j-$_edition-$FLAVOUR-$ARCH.txz ]; then
+            echo -e "${_y}//////// $NAME-$VER-$_ed: installing dependency $i-$j-$_edition...${_n}"
+            [ $DEBUG = 1 ] && read N
+
+            chroot ${CHROOT}-$_edition sh -c "pkg add $PDIR/$i-$j-$_edition-$FLAVOUR-$ARCH.txz >/dev/null 2>&1"
+  
+            if [ $? != 0 ]; then
+                echo -e "${_r}//////// ERROR $NAME-$VER-$_ed: failed to load dependency $i-$j-$_edition${_n}"
+                exit 1
+            fi
+        else
+            echo -e "${_r}//////// ERROR $NAME-$VER-$_ed: dependency $i-$j-$_edition should be in $PDIR, but is absent${_n}"
+            exit 1
+        fi
+    done
+
+
+#//////////////////////////////////////////////////////////////////////////
+#
+# Let the user check the build environment once more
+#
+#//////////////////////////////////////////////////////////////////////////
+
+    TMP=""
+    for i in `chroot ${CHROOT}-$_ed sh -c "pkg info" | awk '{ print $1 }'`
+    do
+        TMP="$TMP $i"
+    done
+
+    echo -e "${_y}//////// $NAME-$VER-$_ed: build environment${_n}"
+    echo -e "${_y}//////// Dependencies:${_n}"
+    echo -e "${_b}$DEPS${_n}"
+    echo -e "${_y}//////// Actually installed:${_n}"
+    echo -e "${_b}"
+    for i in $TMP
+    do
+        j=`chroot ${CHROOT}-$_ed sh -c "pkg info $i" | grep -E "Name +:" | awk '{ print $3 }'`
+        echo -n "$j "
+    done
+    echo -e "${_n}"
+    [ $DEBUG = 1 ] && read N
+
+
+#/////////////////////////////////////////////////////////////////////////////
+#
+# Prepare to build the software:
+#
+#//////////////////////////////////////////////////////////////////////////////
+
+
+    #/////  Unpack
+
+    TYPE=`file $SRCNAME | awk '{ print $2}' `
+
+    if [ x$BUILDTYPE != xPEAR ];then
+        case $TYPE in
+            gzip)
+                su $BUILDUSER -c "zcat $SRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            bzip2)
+                su $BUILDUSER -c "bzcat $SRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            xz|XZ)
+                su $BUILDUSER -c "xzcat $SRCNAME | tar -C ${CHROOT}-$_ed/${BDIR} -xf - " || exit 1
+            ;;
+            Zip)
+                su $BUILDUSER -c "cd ${CHROOT}-$_ed/${BDIR} && unzip -oq $SRCNAME " || exit 1
+            ;;
+            *)
+                echo -e "${_r}//////// Unrecognized compression format, exitting${_n}"
+                exit 1
+            ;;
+        esac;
+    fi
+else
+    BUILDTYPE=C
+    mkdir -p ${CHROOT}-$_ed/${BDIR}/${NAME}-${VER}
+    echo "all:"                        >  ${CHROOT}-$_ed/${BDIR}/${NAME}-${VER}/Makefile
+    echo "install:"                   >>  ${CHROOT}-$_ed/${BDIR}/${NAME}-${VER}/Makefile
+    echo "	mkdir -p \$(DESTDIR)" >>  ${CHROOT}-$_ed/${BDIR}/${NAME}-${VER}/Makefile
+    chown -R $BUILDUSER ${CHROOT}-$_ed/${BDIR}/${NAME}-${VER}
+fi
+
+#///// Trim
+
+i=0
+while : ;
+do
+    eval _cmd=\"\$TRIM_${i}\"
+
+    if [ -n "$_cmd" ];then
+        chroot ${CHROOT}-$_ed sh -c "$_cmd"
+        i=$(expr $i + 1)
+    else
+        eval _cmd=\"\$TRIM_${i}_$_ed\"
+        if [ -n "$_cmd" ];then
+            chroot ${CHROOT}-$_ed sh -c "$_cmd"
+            i=$(expr $i + 1)
+        else
+            break
+        fi
+    fi 
+done
+
+
+echo -e "${_y}//////// $NAME-$VER-$_ed: trimmed${_n}"
+[ $DEBUG = 1 ] && read N
+
+#///// Patch
+
+if [ -f $PATCHDIR/$NAME-$VER-$_ed.diff  ];then
+    cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER-$_ed.diff"
+    echo -e "${_y}//////// $NAME-$VER-$_ed: patch applied${_n}"
+    [ $DEBUG = 1 ] && read N
+fi
+
+
+if [ -f $PATCHDIR/$NAME-$VER.diff  ];then
+    cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER.diff"
+    echo -e "${_y}//////// $NAME-$VER-$_ed: patch applied${_n}"
+    [ $DEBUG = 1 ] && read N
+fi
+
+i=0
+while : ;
+do
+    if [ -f $PATCHDIR/$NAME-$VER.diff_${i}  ];then
+        cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER.diff_${i}"
+        echo -e "${_y}//////// $NAME-$VER-$_ed: patch #${i} applied${_n}"
+        [ $DEBUG = 1 ] && read N
+        i=$(expr $i + 1)
+    else
+        break
+    fi 
+done
+
+i=0
+while : ;
+do
+    if [ -f $PATCHDIR/$NAME-$VER-$_ed.diff_${i}  ];then
+        cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER-$_ed.diff_${i}"
+        echo -e "${_y}//////// $NAME-$VER-$_ed: patch #${i} applied${_n}"
+        [ $DEBUG = 1 ] && read N
+        i=$(expr $i + 1)
+    else
+        break
+    fi 
+done
+
+
+#////////////////////////////////////////////////////////////////////////////////
+#
+# Setup environment
+#
+#////////////////////////////////////////////////////////////////////////////////
+
+
+for i in $EXPORT
+do
+    export $i
+done
+
+
+#///////////////////////////////////////////////////////////////////////////////////////
+#
+# build the software 
+#
+#///////////////////////////////////////////////////////////////////////////////////////
+
+eval _cmd=\"\$MAKETARGET_$_ed\"   
+[ -n "$_cmd" ] && MAKETARGET=$_cmd
+eval _cmd=\"\$INSTALLTARGET_$_ed\"   
+[ -n "$_cmd" ] && INSTALLTARGET=$_cmd
+
+build_$BUILDTYPE
+
+if [ x$BUILDPKG = xNO ];then
+    __FINISH__=`date`
+    echo -e "${_y}//////// $NAME-$VER-$_ed: started at ${_b}$__START__${_y}, finished at ${_b}$__FINISH__${_n}"
+    [ $DEBUG = 1 ] && read N
+    exit 0;
+fi
+
+
+#/////////////////////////////////////////////////////////////////////////
+#
+# Let the user see empty directories and links in the installed software 
+#
+#/////////////////////////////////////////////////////////////////////////
+
+
+echo -e "${_y}//////// $NAME-$VER-$_ed: installed${_n}"
+[ $DEBUG = 1 ] && read N
+
+
+echo -e "${_y}//////// Empty directories:${_b}"
+chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type d -empty"
+echo -e "${_y}//////// Symlinks:${_b}"
+chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type l"
+echo -e "${_y}//////// Hardlinks:${_b}"
+chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type f ! -links 1"
+echo -e "${_n}"
+[ $DEBUG = 1 ] && read N
+
+
+#/////////////////////////////////////////////////////////////////////////
+#
+# create file list
+#
+#/////////////////////////////////////////////////////////////////////////
+
+if [ x$BUILDTYPE != xPEAR -a x$VIRTUAL = xNO ];then
+
+    [ -f ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$FLAVOUR ] && rm ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$FLAVOUR
+
+    echo "regular files:" > ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    for i in `chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type f" | sed -e "s@$DDIR/$NAME-$VER@@" | sed -e "s@ @%%%%@g"`
+    do
+        j=`echo "$i" | sed -e "s@%%%%@ @g"` # take care of spaces in filenames
+        echo $j >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    done
+ 
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "symlinks:" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+
+    for i in `chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type l" | sed -e "s@$DDIR/$NAME-$VER@@"`
+    do
+        echo $i >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    done
+    
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "empty directories:" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    echo "" >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+
+    for i in `chroot ${CHROOT}-$_ed sh -c "find $DDIR/$NAME-$VER -type d -empty" | sed -e "s@$DDIR/$NAME-$VER@@"`
+    do
+        echo $i >> ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    done
+
+    chflags -R noschg ${CHROOT}-$_ed/$DDIR/$NAME-$VER
+    rm -r ${CHROOT}-$_ed/$DDIR/$NAME-$VER
+
+    if [ ! -f ${CHROOT}-$_ed/$PDIR/$OPKGNAME-$VER-$_ed-$FLAVOUR-$ARCH.txz -a ! -f ${CHROOT}-$_ed/$LDIR/$OPKGNAME-$VER-$_ed-$FLAVOUR ];then
+        echo -e "${_r}//////// $OPKGNAME not created! Most probably it was listed as a dependency ${_n}"
+        exit 1
+    fi
+fi
+
+#//////////////////////////////////////////////////////////////////////////
+#
+# Clean up environment after build
+#
+#//////////////////////////////////////////////////////////////////////////
+
+[ -d ${CHROOT}-$_ed/$BDIR/$NAME-$VER ] && rm -r ${CHROOT}-$_ed/$BDIR/$NAME-$VER
+[ -d ${CHROOT}-$_ed/$BDIR/src ] && rm -r ${CHROOT}-$_ed/$BDIR/src
+[ -d ${CHROOT}-$_ed/$BDIR/bin ] && rm -r ${CHROOT}-$_ed/$BDIR/bin
+[ -d ${CHROOT}-$_ed/$BDIR/pkg ] && rm -r ${CHROOT}-$_ed/$BDIR/pkg
+
+i=0
+while : ;
+do
+    eval _cmd=\"\$CLEANUP_${i}\"
+
+    if [ -n "$_cmd" ];then
+        chroot ${CHROOT}-$_ed sh -c "$_cmd"
+        i=$(expr $i + 1)
+    else
+        eval _cmd=\"\$CLEANUP_${i}_$_ed\"
+        if [ -n "$_cmd" ];then
+            chroot ${CHROOT}-$_ed sh -c "$_cmd"
+            i=$(expr $i + 1)
+        else
+            break
+        fi
+    fi 
+done
+
+__FINISH__=`date`
+echo -e "${_y}//////// $NAME-$VER-$_ed: started at ${_b}$__START__${_y} finished at ${_b}$__FINISH__${_n}"
+[ $DEBUG = 1 ] && read N
+
+
+#//////////////////////////////////////////////////////////////////////////////
+#
+# Uninstall previously installed dependencies for this package
+# (make the environment clean again)
+#
+#//////////////////////////////////////////////////////////////////////////////
+
+
+if [ "x$DEPS" != "x" ];then
+    echo -e "${_y}//////// $NAME-$VER-$_ed: removing dependencies${_n}"
+    echo -e "${_b}$DEPS${_n}"
+    [ $DEBUG = 1 ] && read N
+ 
+    for i in `chroot ${CHROOT}-$_ed sh -c "pkg info" | awk '{ print $1 }'`
+    do
+        j=`chroot ${CHROOT}-$_ed sh -c "pkg info $i" | grep -E "Name +:" | awk '{ print $3 }'`
+        chroot ${CHROOT}-$_ed sh -c "pkg delete -yf $j >/dev/null 2>&1"
+    done
+
+fi
+
+    cd /
+done # _ed
+
+

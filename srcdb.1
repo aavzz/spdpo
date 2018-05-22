@@ -1,0 +1,346 @@
+.TH SRCDB 1 "2014-04-08" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fBsrcdb\fP \- helper tool to keep track of third-party source packages
+.SH SYNOPSIS
+srcdb [-p \fIprefix\fP] -o import [-k] -n \fIname\fP -v \fIversion\fP -s \fIsrcname\fP -u \fIurl\fP
+
+srcdb [-p \fIprefix\fP] -o loadfrom [-k] -f \fIfilename\fP -d \fIdelimiter\fP
+      [-e \fIprepend\fP]
+
+srcdb [-p \fIprefix\fP] -o download -n \fIname\fP -v \fIversion\fP
+
+srcdb [-p \fIprefix\fP] -o info -n \fIname\fP -v \fIversion\fP
+
+srcdb [-p \fIprefix\fP] -o getall [-f \fIfilename\fP]
+
+srcdb [-p \fIprefix\fP] -o delete -n \fIname\fP -v \fIversion\fP
+
+srcdb [-p \fIprefix\fP] -o list
+
+srcdb [-p \fIprefix\fP] -o backupdb
+
+srcdb [-p \fIprefix\fP] -o checkdb
+
+srcdb [-p \fIprefix\fP] -o purgedb
+
+srcdb [-p \fIprefix\fP] -o installdb -f \fIfilename\fP
+
+srcdb [-p \fIprefix\fP] -o installdb -f \fIurl\fP
+.SH DESCRIPTION
+\fBsrcdb\fP stores information about tird-party software packages (tarballs) and downloads those tarballs. 
+Its main objective is to provide for the presence of source tarballs in local filesystem, so that
+a software building system have something to work with. Source tarballs are fetched from various
+locations, their checksum is tested, and the location of the downloaded tarballs is reported to
+the software building tool. 
+
+\fBsrcdb\fP is a personal tool (each user creates and 
+maintains its own information database), there is no `official repository'.
+
+In order to keep dependency list empty \fBsrcdb\fP is implemented as a shell script. It relies
+upon external binaries which are generally available in modern operating systems.
+.SH DATABASE
+\fBsrcdb\fP keeps its data in a filesystem-based database under \fB/var/db/srcdb/db\fP by default.
+If the \fB-p\fP option is specified on the command line, \fBsrcdb\fP uses the provided prefix instead of
+\fB/var/db/srcdb\fP. The database resides in the \fBdb\fP subdirecrory of the provided prefix.
+
+Entries in the database are identified by \fBname\fP and \fBversion\fP
+implemented as a 2-level filesystem hierarchy (name/version). The above mentioned \fBname\fP and \fBversion\fP are user-defined
+and have nothing to do with the filename of the tarball (although it is convenient to name packages after tarballs). The information in the database includes
+filename of the tarball, URLs where the tarball is located, and md5 checksums of all the files in the tarball.
+
+Bundle download information is kept in files named after source
+bundles with the extension `.url' appended. Each of the files consists of URLs
+of the distribution bundle one per line. E.g. information about \fBsomepackage-0.1\fP can be kept in the following files at the same time:
+
+  \fB/var/db/srcdb/db/somepackage/0.1/somepackage-0.1-src.tar.gz.url\fP
+  \fB/var/db/srcdb/db/somepackage/0.1/somepackage-0.1.tar.bz2.url\fP
+  \fB/var/db/srcdb/db/somepackage/0.1/sp-current.tar.xz.url\fP
+
+each consisting of complete URLs one per line (like this: \fBhttp://www.someplace.com/subdir1/somepackage-0.1-src.tar.gz\fP).
+
+The following bundle formats are supported: \fBtar.gz\fP, \fBtar.bz2\fP, \fBtar.xz\fP, and \fBzip\fP.
+Several bundles of different formats can provide storage for the same package. What makes a package unique is
+the checksums of all its files. Checksums for the package are kept in a file named \fBpackage/version/sum.md5.bz2\fP.
+
+Supose we have a source package \fBfoo-0.1\fP
+consisting of the following files: \fBfile1.c file2.c file3.h\fP. It does
+not matter whether the author distributes them as \fBfoo-0.1.zip\fP
+or some other site repackages them as \fBbar-current.tar.bz2\fP. As
+long as they have identical md5 hashes for all the files contained 
+they are the same package from the \fBsrcdb\fP point of view.
+
+Unfortunately, sometimes package maintainers make changes to published software without altering its version, which
+causes checksum mismatch. On rare ocasions they provide source bundles of various formats with non-identical contents.
+There is little to be done in such cases but to update the \fBsrcdb\fP database or refrain from importing
+the offending source bundle to \fBsrcdb\fP.
+.SH SOURCE BUNDLES
+\fBsrcdb\fP keeps the source bundles under \fB/var/db/srcdb/src\fP by default.
+If the \fB-p\fP option is specified on the command line, \fBsrcdb\fP uses the provided prefix instead of
+\fB/var/db/srcdb\fP. Source bundles are expected to be in the \fBsrc\fP subdirecrory of the provided prefix.
+.SH MODES OF OPERATION
+\fBsrcdb\fP supports the following modes of operation:
+.TP
+.B import
+In this mode (\fB-o import\fP) \fBsrcdb\fP adds information to its database for later use. It is the most common way to add
+information into \fBsrcdb\fP. In this mode the following options are used:
+
+-k keep source tarball (optional)
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-n \fIname\fP
+   name of the package
+
+-v \fIversion\fP 
+   version of the package
+
+-s \fIsrcname\fP
+   name of the source tarball
+
+-u \fIurl\fP
+   location of the tarball
+.TP
+.B loadfrom
+This mode (\fB-o loadfrom\fP) is used when all the tarballs are imported from the same location (e.g. x.org). In such a situation
+it can be more convenient to prepare a special list of files and to pass it through \fBsrcdb\fP for information import than to 
+manually import information about each tarball.
+
+Each line in the list specifies one file (it is possible to include path inormation about consecutive parent diectories,
+e.g.: \fBgrandparentdir/parentdir/file\fP). There must be a \fBdelimeter\fP in the filename. It separates \fBname\fP from \fBversion\fP.
+In most distribuion packages a dash is used initially for
+the purpose. Unortunately the same character is used frequently elsewhere in the filename which makes automatic parsing into \fBname\fP
+and \fBversion\fP impossible. The file list must be peprocessed by user before being submitted to \fBsrcdb\fP. It is the
+responsibility of the user to "highlight" the point of the \fBname\fP and \fBversion\fP separation with whatever string he thinks appopriate.
+E.g.: \fBsome-filename-1.2.3\fP is transformed into \fBsome-filename%1.2.3\fP in the list and \fB-d %\fP is used on the command line.
+
+A prefix specified on the command line will be prepended to the contents of the list. Most brobably it will be the first part of the URL of which the filename specified in 
+the list is the second part.
+
+In this mode the following options are used:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-f \fIfilename\fP
+   name of the file containing the list of files being imported
+
+-d \fIdelimeter\fP
+   a user-deined string used to separate \fBname\fP from \fBversion\fP
+
+-e \fIprepend\fP
+   a string to be prepended to all the filenames in the list
+
+-k keep source tarball (optional)
+.TP
+.B download
+This mode (\fB-o download\fP)) is used for actual downloading of distribution files. Information about tarballs being downloaded must be
+imported previously via \fBsrcdb -o import ...\fP or \fBsrcdb -o loadfrom ...\fP. 
+When doing download \fBsrcdb\fP checks if the file it is about to download is already present and checks its integrity.
+If the integrity check fails the file is deleted and an attempt is made to download it. If the file is present and passes the integrity check,
+\fBsrcdb\fP skips the download. If the file \fB/etc/srcdb.download\fP exists, \fBsrcdb\fP 
+tries to download the tarballs from URLs specified in this file (one per line) before referring to the URLs contained in the database. This is 
+convenient when all the source tarballs are kept together in one or several central locations. In this mode the following options are used:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-n \fIname\fP
+   name of the package
+
+-v \fIversion\fP 
+   version of the package
+
+-k keep source tarball (optional)
+.TP
+.B info
+This mode (\fB-o info\fP) is used for reporting actual filename for the package and its location
+in the filesystem. The principal user of this mode if the software building system. The following options are used:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-n \fIname\fP
+   name of the package
+
+-v \fIversion\fP 
+   version of the package
+.TP
+.B getall
+This mode (\fB-o getall\fP) is used for mass download of previously registered sotware. If filename is specified, only the packages listed in the file are downloaded.
+Otherwise  all the packages known to \fBsrcdb\fP will be tried. The file has the folowing format: one line per package, package is specified as \fBname/version\fP.
+The \fBgetall\fP mode is implemented as a series of \fBsrcdb -o download\fP invocations, so all the peculiarities of the \fBdownload\fP mode apply.
+In the \fBgetall\fP mode the following options are used:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-f \fIfilename\fP
+   name of the file containing the list of packages to download
+.TP
+.B delete
+This mode (\fB-o delete\fP) is used for deleting pakages from \fBsrcdb\fP\. It uses the following options:
+
+-o delete
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-n \fIname\fP
+   name of the package
+
+-v \fIversion\fP 
+   version of the package
+.TP
+.B list
+This mode (\fB-o list\fP) is used to create a list of all distribution packages the \fBsrcdb\fP keeps tack of. It does not matter whether the pakage 
+is already downloaded or not. The output is in \fBname/version\fP format. In this mode the following options are used:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+.TP
+.B checkdb
+This mode (\fB-o checkdb\fP) is used to check the contents of the \fBsrcdb\fP database against \fBspdpo\fP specification files to see which software is not used
+and can be safely removed from \fBsrcdb\fP. Useful to clean the database of references to old versions. The following options are used.
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+.TP
+.B purgedb
+This mode (\fB-o purgedb\fP) is used to remove stale contents from the \fBsrcdb\fP database. The following options are used.
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+.TP
+.B backupdb
+This mode (\fB-o backupdb\fP) is used to create backups of the \fBsrcdb\fP database. During backup a compressed tarball is created in the current directory. The following options are used.
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+.TP
+.B installdb
+This mode (\fB-o installdb\fP) is used to install the \fBsrcdb\fP database from a previously created backup (xzipped tarball). Filename can be either the name of the backup
+tarball or the URL from which it can be downloaded. The following protocols are supported for network download: \fBftp\fP, \fBhttp\fP, and \fBhttps\fP. This mode uses the following options:
+
+-p \fIprefix\fP
+   path to database (db) and sources (src) (optional)
+
+-f \fIfilename\fP
+   filename or URL of the database backup
+.SH EXAMPLES
+GNU make and x.org libraries are used as laboratory rats.
+
+\fBimport\fP
+
+To import information about GNU make the following commands are used:
+
+  \fBsrcdb -o import -u ftp://ftp.gnu.org/gnu/make/make-4.0.tar.bz2 \\ 
+        -s make-4.0.tar.bz2 -n gmake -v 4.0\fP
+
+  \fBsrcdb -o import -u ftp://ftp.gnu.org/gnu/make/make-4.0.tar.gz \\ 
+        -s make-4.0.tar.gz -n gmake -v 4.0\fP  
+
+The above commands make it possible to download GNU make from alternative locations.
+
+  \fBsrcdb -o import -k -u ftp://ftp.gnu.org/gnu/make/make-4.0.tar.bz2 \\ 
+        -s make-4.0.tar.bz2 -n gmake -v 4.0\fP
+
+Keeps the downloaded tarball in the local filesystem after information import (normally deleted).
+
+
+\fBloadfrom\fP
+
+To import information about libraries from X11R7.7 we first create a file list named \fBxlibs\fP (note the percent sign):
+
+  libFS%1.0.4.tar.bz2
+  libICE%1.0.8.tar.bz2
+      
+  ...
+
+  xtrans%1.2.7.tar.bz2
+
+then issue the following command:
+
+  \fBsrcdb -o loadfrom -f xlibs -d % \\
+        -e http://www.x.org/releases/X11R7.7/src/lib/\fP
+
+
+\fBdownload\fP
+
+To download gmake-4.0 issue the following command:
+
+  \fBsrcdb -o download -n gmake -v 4.0\fP
+
+All locations will be tried consecutively, the first file successfully downloaded (and checksum test passed) will be placed in the local
+filesystem under \fB/var/db/srcdb/src\fP.
+
+If the file \fB/etc/srcdb.download\fP contains the line \fBhttp://fstore.sinnumero.net\fP, this URL will be tried before \fBftp://ftp.gnu.org/gnu/make/\fP
+for the download of \fBmake-4.0.tar.gz\fP and \fBmake-4.0.tar.bz2\fP.
+
+
+\fBinfo\fP
+
+To get information about location of the tarball for the \fBgmake-4.0\fP package the following command is used:
+
+  \fBsrcdb -o info -n gmake -v 4.0\fP
+
+in case the source tarball is present in the local file system, its location is reported (only one tarball is reported):
+
+  \fB/var/db/srcdb/src/gmake-0.4.tar.bz2\fP
+
+in case the source tarball is not present in the local file system, \fBsrcdb\fP returns the string "\fBNot found\fP",
+if the information about \fBgmake-4.0\fP was not imported into \fBsrcdb\fP the user is notified accordingly.
+
+
+\fBgetall\fP
+
+To download all the packages known to \fBsrcdb\fP issue the following command:
+
+  \fBsrcdb -o getall\fP
+
+If the file \fB/etc/srcdb.download\fP contains the line \fBhttp://fstore.sinnumero.net\fP, this URL will be tried before URLs of the main distribution sites
+for the download of tarballs.
+
+
+\fBdelete\fP
+
+To delete the information about \fBgmake-4.0\fP from \fBsrcdb\fP issue the following command:
+
+  \fBsrcdb -o delete -n gmake -v 4.0\fP
+
+
+\fBlist\fP
+
+To list all the packages known to \fBsrcdb\fP issue the following command:
+
+  \fBsrcdb -o list\fP
+
+If a more specific information is needed, the output can be piped through \fBgrep\fP.
+
+
+\fBbackupdb\fP
+
+To create a backup of the \fBsrcdb\fP database issue the following command:
+
+  \fBsrcdb -o backupdb\fP
+
+
+\fBinstalldb\fP
+
+To install the \fBsrcdb\fP database from \fBhttp://fstore.sinnumero.net\fP issue the following command:
+
+  \fBsrcdb -o installdb -f http://fstore.sinnumero.net/srcdb-db.tar.xz\fP
+
+Of course, you need to upload \fBsrcdb-db.tar.xz\fP to \fBfstore.sinnumero.net\fP beforehand!
+.SH USAGE GUIDELINES
+It is strongly recomended to keep all the source tarballs in one or several central locations and to make them available via network. The reason for this is
+that oftentimes the needed source tarball is unavailable on its main distribution site due to network outages or
+because the author deletes old versions as he adds new ones.
+.SH SEE ALSO
+\fBspdpo\fP(\fB1\fP)
+.SH BUGS
+Send bug reports to <aavzz@yandex.ru>
+.SH AUTHOR
+Alex Zimnitsky

@@ -1,0 +1,211 @@
+.TH SPDPO.CONF 5 "2018-04-12" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fB/etc/spdpo.conf\fP \- Main configuration file for \fBspdpo\fP
+.SH DESCRIPTION
+.PP
+\fBspdpo\fP is a shell script to automate the process of package creation. It produces
+\fBpkgng\fP packages. 
+\fBspdpo\fP configuration files include main configuration file \fB/etc/spdpo.conf\fP, flavour configuration file
+\fB/usr/share/spdpo/\fPFLAVOUR\fB/config\fP,
+package configuration file, and sub-package configuration file(s).
+.SH FLAVOURS
+.PP
+Package and sub-package configuration files files are grouped into sets named \fBflavours\fP. Each set can contain only one specification file
+for a given [sub]package. A given [sub]package may have specification files in different sets (hence different
+\fBflavours\fP of a [sub]package).
+Package specification files are named after packages and are meant to be composed of variables and comments (actually, they are shell-scrips
+and get included with the '\fB.\fP' into \fBspdpo\fP).
+.PP
+Specification files devide into main-package and sub-package(s). Main-package specification
+file is used to prepare the environment and to build the software. Sub-packages specification files are used
+to create needed packages from built
+software (slice it into executables, development files, shared libs, documentation, etc.). 
+Sub-packages have the same name as the main package with \fB::suffix\fP appended. The \fBsuffix\fP can be
+anything you want, although for some values are explicitly supported by \fBspdpo-split\fP.
+.PP
+A given specification file set (\fBflavour\fP) may have a configuration file containing variables common
+to the whole specification set (see below).
+.SH BUNDLES
+Within a \fBflavour\fP [sub]packages are further grouped into \fBbundles\fP. This facilitates logical organization and makes
+large collections manageable.
+.SH VARIABLES (FLAVOUR CONFIGURATION FILE)
+A configuration variable may have the \fB_edition\fP part which indicates that it is used for specific edition only.
+.TP
+.B EDITIONS
+Optional. Lists editions of the packages to build (e.g. "gcc llvm")
+.TP
+.B MAINTAINER
+Optional. Email address of the package set maintainer.
+.TP
+.B LICENCE
+Optional. Package set licence.
+.TP
+.B GOVER
+Optional. Version of the Go programming language used in the flavour.
+.TP
+.B PYTHON2VER
+Optional. Version of the Python2 programming language used in the flavour.
+.TP
+.B PYTHON3VER
+Optional. Version of the Python3 programming language used in the flavour.
+.SH VARIABLES (MAIN-PACKAGE SPECIFICATION FILES)
+.PP
+Main-package specification files may contain the following variables:
+.TP
+.B NAME
+Mandatory. Name of the package. Same as the filename.
+.TP
+.B VER
+Mandatory. Package version.  
+.TP
+.B COMMENT
+Mandatory. One-line description of the package.
+.TP
+.B DESCR
+Mandatory. More detailed description of the package.
+.TP
+.B IGNORE
+Optional. Default is 'NO'. If set to any other value, the package will not be built.
+.TP
+.B TRIM[_edition]_N
+Optional. Contains instructions executed after the sources are extracted. Instructions are executed in the order defined by \fBN\fP.
+\fBN\fP starts from 0 and grows by 1 as necessary. Instructions are executed in the directory containing the extracted folder. 
+.TP
+.B DEPS
+Optional. Specifies package build-time dependencies separated with space.
+.TP
+.B BUILDTYPE
+Optional. Provides a hint to \fBspdpo\fP what type of build system the package uses. The values are:
+  \fBC\fP      - configure, make, make install (default)
+  \fBCMAKE\fP  - cmake, make, make install
+  \fBPERL\fP   - perl Makefile.PL, make, make install
+  \fBPERLB\fP  - perl Build.PL, make, make install
+  \fBPYTHON\fP - python setup.py install
+  \fBPEAR\fP   - no processing needed
+  \fBSCONS\fP  - scons install   
+  \fBGO\fP     - Go build process   
+  \fBNODEJS\fP - NodeJs build process   
+.TP
+.B BUILDUSER
+Optional. Privileges during configuration and build stages. Default is \fBbuildprocess\fP. Some packages require \fBroot\fP privileges
+to build.
+.TP
+.B CONFSUBDIR
+Optional. If build configuration files for the source tree do not live in the source root, relevant subdir is specified via this variable. Default is empty (toplevel).
+.TP
+.B BUILDDIR
+Optional. If build system of the source tree requires it to be built from outside the source tree, relevant build location is specified here. Default is empty (toplevel)
+or the value of \fBCONFSUBDIR\fP.
+.TP
+.B CONFIG
+Optional. When GNU autotools are used as buildsystem, sets the name of the configuration script. Default value is \fB./configure\fP  
+.TP
+.B CONFIG_STR[_edition]
+Optional. Arguments for the configuration script. Default value is \fB--prefix=/usr --sysconfdir=/etc --mandir=/usr/share/man --infodir=/usr/share/info --localstatedir=/var\fP.
+.TP
+.B EXPORT
+Optional. You can define your own variable and export it into the build environment by listing the name of the variable in \fBEXPORT\fP. Some variables have already beed added
+to \fBEXPORT\fP (in \fB/etc/spdpo.conf\fP), so you only need to set them. Those variables are: \fBYASMFLAGS CFLAGS CXXFLAGS LDFLAGS LIBS MAKE\fP.
+.TP
+.B MAKE
+Optional. Name of the make executable. Default value is \fBmake\fP
+.TP
+.B MAKETARGET
+Optional. Target used by make to build software. By default not defined.
+.TP
+.B INSTALLTARGET
+Optional. Target used by make to install software. Default is \fBinstall\fP.
+.TP
+.B INSTALLPREFIX_NAME
+Optional. Name of the make variable used to specify installation root directory. Default is \fBDESTDIR\fP.
+.TP
+.B CLEANUP_N
+Optional. If something was altered in the system in order to build the package, undo it here.
+.TP
+.B CFLAGS[_edition]
+Optional. Compiler environment variable.
+.TP
+.B CPPFLAGS
+Optional. Compiler environment variable.
+.TP
+.B CXXFLAGS[_EDITION]
+Optional. Compiler environment variable.
+.TP
+.B LDFLAGS[_edition]
+Optional. Linker environment variable.
+.TP
+.B LIBS[_edition]
+Optional. Linker environment variable.
+.TP
+.B MAINTAINER
+Optional. Email address of the maintainer. Default is \fBsomeone@somewhere.org\fP.
+.TP
+.B LICENSE
+Optional. License of the package. Default is \fBBSD\fP.
+.TP
+.B IGNOREBUILDERROR
+Optional. If set to '1', errors during build will not cause \fBspdpo\fP to stop. Default undefined.
+.TP
+.B IGNOREINSTALLERROR
+Optional. If set to '1', errors during install will not cause \fBspdpo\fP to stop. Default undefined.
+.SH VARIABLES (SUB-PACKAGE SPECIFICATION FILES)
+.PP
+Sub-package specification files may contain the following variables:
+.TP
+.B NAME
+Mandatory. Name of the sub-package. Same as the filename.
+.TP
+.B INAME
+Optional. \fB::\fP is used to separate main package name from sub-package extension. Some makefiles do not like it. This variable lets us define the name of the installation directory that everybody likes.
+.TP
+.B DEPS
+Optional. Specifies sub-package installation dependencies separated with space.
+.TP
+.B INSTALLTARGET
+Optional. Target used by make to install software. Default is \fBinstall\fP.
+.TP
+.B INSTALLPREFIX_NAME
+Optional. Name of the make variable used to specify installation root directory. Default is \fBDESTDIR\fP.
+.TP
+.B COMMENT
+Mandatory. One-line description of the package.
+.TP
+.B DESCR
+Mandatory. More detailed description of the package.
+.TP
+.B PREINSTALL_N
+Optional. Commands to be run by the package before installation of its files.
+.TP
+.B POSTINSTALL_N
+Optional. Commands to be run by the package after installation of its files.
+.TP
+.B PREDEINSTALL_N
+Optional. Commands to be run by the package before deinstallation of its files.
+.TP
+.B POSTDEINSTALL_N
+Optional. Commands to be run by the package after deinstallation of its files.
+.TP
+.B POSTPROCESS_N
+Optional. Carve the needed files for the sub-package. If some modifications to the installed software is needed in order to create a sub-package (e.g. remove a file), do it here.
+.TP
+.B GOBUILDPATH
+Optional (Go only). Where Go expects the package to be included from afterwards.
+.TP
+.B GONAME
+Optional (Go only). How Go expects the package to be referred to afterwards.
+.TP
+.B GODEPS
+Optional (Go only). What (not yet build) go pakages are needed to build this one. This is how circular dependencies are dealt with in Go
+world.
+.SH SEE ALSO
+\fBspdpo\fP(\fB1\fP)
+\fBspdpo\fP(\fB7\fP)
+\fBsrcdb\fP(\fB1\fP)
+\fBspdpo-split\fP(\fB1\fP)
+\fBimagefactory\fP(\fB1\fP)
+.SH BUGS
+Send bug reports to <aavzz@yandex.ru>
+.SH AUTHOR
+Alex Zimnitsky

@@ -1,0 +1,26 @@
+#!/bin/sh
+
+cat << EOF > Makefile
+
+all:
+install:
+	mkdir -p \$(DESTDIR)/usr/share/man/man1
+	mkdir -p \$(DESTDIR)/usr/share/man/man5
+	mkdir -p \$(DESTDIR)/usr/share/man/man7
+	mkdir -p \$(DESTDIR)/usr/bin
+	mkdir -p \$(DESTDIR)/etc
+	mkdir -p \$(DESTDIR)/var/spool/spdpo/build
+	mkdir -p \$(DESTDIR)/var/spool/spdpo/img
+	touch \$(DESTDIR)/.vm-imagefactory
+	cp spdpo spdpo-subpackage spdpo-split srcdb imagefactory \$(DESTDIR)/usr/bin
+	chmod 755 \$(DESTDIR)/usr/bin/spdpo
+	chmod 755 \$(DESTDIR)/usr/bin/spdpo-subpackage
+	chmod 755 \$(DESTDIR)/usr/bin/spdpo-split
+	chmod 755 \$(DESTDIR)/usr/bin/srcdb
+	chmod 755 \$(DESTDIR)/usr/bin/imagefactory
+	cp spdpo.conf \$(DESTDIR)/etc/spdpo.conf
+	cp spdpo.1 spdpo-split.1 srcdb.1 imagefactory.1 \$(DESTDIR)/usr/share/man/man1
+	cp spdpo.7 \$(DESTDIR)/usr/share/man/man7
+	cp spdpo.conf.5 \$(DESTDIR)/usr/share/man/man5
+EOF
+

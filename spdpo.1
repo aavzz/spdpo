@@ -1,0 +1,62 @@
+.TH SPDPO 1 "2018-04-12" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fBspdpo\fP \- Package creation automation tool
+.SH SYNOPSIS
+spdpo [-d] -f \fIflavour\fP \fIpackage_name\fP
+
+spdpo -h -f \fIflavour\fP \fIpackage_name\fP
+
+spdpo -b
+
+spdpo -i \fIfile|URL\fP
+
+spdpo -e \fIedition\fP
+
+spdpo -B
+
+spdpo -D
+.SH DESCRIPTION
+.PP
+\fBspdpo\fP is a shell script to automate the process of package creation. It produces
+\fBpkgng\fP packages. \fBspdpo\fP also provides simple controls for management of specification file collections
+(backup and installation from file or URL). 
+.SH OPTIONS
+\fBspdpo\fP supports the following options:
+.TP
+.B -f \fIflavour\fP
+Specifies the variant (flavour) of a package to build.
+.TP
+.B -d
+Debug mode. Wait for the user to press \fBEnter\fP after each step during the build process.
+.TP
+.B -h
+Dispaly configuration help if available. GNU Autotools provide --help option to the coniguration script. Other configuration
+tools sometimes provide something similar. This option makes the package report its coniguration options.
+.TP
+.B -b
+Backup all sets of specification files. Produces a tarball in the current directory.
+.TP
+.B -i \fIfile|URL\fP
+Install sets of specification files from tarball or URL. Supported protocols are \fBhttp\fP, \fBhttps\fP, and \fBftp\fP.
+.TP
+.B -e \fIedition\fP
+Creates initial directories for the chrooted environment (see man 7 spdpo, \fBeditions\fP).
+.TP
+.B -B
+Clean up the builddir.
+.TP
+.B -D
+Clean up the destdir.
+.SH OPERATION
+.SH SEE ALSO
+\fBspdpo\fP(\fB7\fP)
+\fBspdpo.conf\fP(\fB5\fP)
+\fBspdpo-split\fP(\fB1\fP)
+\fBsrcdb\fP(\fB1\fP)
+\fBimagefactory\fP(\fB1\fP)
+.SH BUGS
+Send bug reports to <aavzz@yandex.ru>
+.SH AUTHOR
+Alex Zimnitsky

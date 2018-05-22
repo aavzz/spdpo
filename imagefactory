@@ -1,0 +1,207 @@
+#!/bin/sh
+
+#//////////////////////////////////////////////
+
+usage() {
+    echo "usage: imagefactory [-d] -f flavour image_name"
+    echo "       imagefactory -i URL"
+    echo "       imagefactory -i FILE"
+    echo "       imagefactory -b"
+    exit 1
+}
+
+#//////////////////////////////////////////////
+
+check_vars() {
+    for i in ${VARS}
+    do
+        eval j=\$$i
+        if [ -z "$j" ];then
+            echo "Set ${i} first!"
+            exit 1
+        fi
+    done
+}
+
+#//////////////////////////////////////////////
+
+create_install_CD() {
+    mkdir -p ${BDIR}/${TARGET}/newcd
+    _SYSTEM=`uname`
+    if [ x${_SYSTEM} != xLinux -a x${_SYSTEM} != xFreeBSD ];then
+        echo -e "${_r}Unsupported system!${_n}"
+        exit 1
+    fi
+
+    # Create installer
+    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_PKG
+
+    # Fine-tune installer
+    cp ${BDIR}/${TARGET}/rc.local ${BDIR}/${TARGET}/newcd/etc-dist
+    cp ${BDIR}/${TARGET}/install.sh ${BDIR}/${TARGET}/newcd
+    echo '/dev/cd0 / cd9660 ro 0 0' > ${BDIR}/${TARGET}/newcd/etc-dist/fstab
+    cp -Rp ${BDIR}/${TARGET}/newcd/etc-dist ${BDIR}/${TARGET}/newcd/etc
+#    ln -s libncurses.so.6.1 ${BDIR}/${TARGET}/newcd/lib/libncurses.so.5.9
+    echo "devd_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+#    echo "rc_debug=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+#    echo "rc_info=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "syslogd_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "cron_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "root_rw_mount=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "update_motd=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "hostid_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "ip6addrctl_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "entropy_file=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "hostname=v7os-installer" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "background_fsck=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "cleanvar_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "populate_var=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "gptboot_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
+    echo "hosts" >> ${BDIR}/${TARGET}/newcd/etc/host.conf
+    echo "" > ${BDIR}/${TARGET}/newcd/etc/mtree/BSD.sendmail.dist
+
+    # Create local package repository
+    for i in $EDITIONS
+    do
+        mkdir -p ${BDIR}/${TARGET}/newcd/usr/packages-$i
+        cp /var/chroot/spdpo-$i/var/spool/spdpo/pkg/*-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$i
+    done
+
+    # Create iso image
+    if [ x${_SYSTEM} = xLinux ];then
+        genisoimage -o ${IDIR}/${OUTIMG} -r -b boot/cdboot -no-emul-boot ${BDIR}/${TARGET}/newcd
+    elif [ x${_SYSTEM} = xFreeBSD ];then
+        mkisofs -quiet -o ${IDIR}/${OUTIMG} -r -b boot/cdboot -no-emul-boot ${BDIR}/${TARGET}/newcd
+    fi
+
+    # Cleanup
+    chflags -R noschg ${BDIR}/${TARGET}
+    rm -r ${BDIR}/${TARGET}
+}
+
+
+#//////////////////////////////////////////////
+
+DEBUG=0
+FLAVOUR="."
+
+if [ $# -eq 0 ];then
+    usage
+else
+    while [ $# -gt 0 ];
+    do
+        case $1 in
+            -b)
+                MODE=backuplib
+            ;;
+            -d)
+                DEBUG=1
+            ;;
+            -f)
+                [ x$MODE != x ] && usage
+                MODE=build
+                shift
+                FLAVOUR=$1
+            ;;
+            -i)
+                MODE=installlib
+                shift
+                SOURCE=$1
+            ;;
+            *)
+                TARGET=$1
+                break
+            ;;
+        esac
+        shift
+    done
+fi
+
+# we need FLAVOUR to be set at this time
+            
+. /etc/spdpo.conf
+[ -f $_CFILE ] && . $_CFILE
+
+if [ x$MODE = xbackuplib ];then
+    echo -e "${_y}//////// Backing up library from ${IFPREFIX} into current directory...${_n}"
+    tar -cf - -C ${IFPREFIX}/.. imagefactory | xz > imagefactory-lib-`date "+%Y%m%d%H%M%S"`.tar.xz
+    exit 0
+elif [ x$MODE = xinstalllib ];then
+
+    mkdir -p /var/tmp
+
+    if [ -z ${SOURCE} ];then
+        echo -e "${_r}Filename or URL not specified${_n}"
+        exit 1
+    fi
+
+    if [ -d ${IFWDIR} ];then
+        echo -e "${_r}Library detected in ${IFWDIR}, aborting${_n}"
+        exit 1
+    fi
+
+    echo ${SOURCE} | grep "^http://\|^ftp://\|^https://" > /dev/null
+
+    if [ $? = 0 ]; then
+
+        echo -e "${_y}//////// Downloading ${SOURCE}...${_n}"
+        if [ -f /usr/bin/fetch ];then
+            /usr/bin/fetch --no-verify-peer -o /var/tmp/imagefactory-lib.tar.xz ${SOURCE}
+        elif [ -f /usr/bin/wget ];then
+            /usr/bin/wget --no-check-certificate -O /var/tmp/imagefactory-lib.tar.xz ${SOURCE}
+        fi
+        if [ $? != "0" ];then
+            echo -e "${_r}failure${_n}"
+            exit 1
+        fi
+
+        echo -e "${_y}//////// Installing lib to ${IFPREFIX}...${_n}"
+        xzcat /var/tmp/imagefactory-lib.tar.xz | tar -x -C `dirname ${IFPREFIX}` -f -
+        rm /var/tmp/imagefactory-lib.tar.xz
+
+    elif [ -f ${SOURCE} ];then
+        echo -e "${_y}//////// Installing lib to ${IFPREFIX}...${_n}"
+        xzcat ${SOURCE} | tar -x -C `dirname ${IFPREFIX}` -f -
+    else
+        echo -e "${_r}${SOURCE} not found${_n}"
+        exit 1
+    fi
+    exit 0
+else
+
+    if [ -f ${IFWDIR}/${TARGET} ];then
+        IGNORE=NO
+        . ${IFWDIR}/${TARGET}
+    else
+        echo -e "${_r}File not found ${IFWDIR}/${TARGET}${_n}"
+        exit 1
+    fi
+
+    if [ x$IGNORE != "xNO" ];then
+        echo -e "${_y}//////// Not building ${TARGET}${_n}"
+        exit 0
+    fi
+
+    #
+    # All the needed variables are set, let's begin
+    #
+
+    if [ ! -f /.vm-imagefactory ];then
+        echo -e "${_y}//////// vm-bhyve-imagefactory is meant to be created in a dedicated VM${_n}"
+        exit 0
+    fi
+
+    check_vars
+
+    mkdir -p ${BDIR}/${TARGET}
+
+    cat << EOF > ${BDIR}/${TARGET}/rc.local
+#!/bin/sh
+/install.sh
+EOF
+
+    CREATE_INSTALLMEDIA_INSTALLSCRIPT
+
+    create_install_$MEDIATYPE
+
+fi

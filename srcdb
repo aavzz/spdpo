@@ -1,0 +1,662 @@
+#!/bin/sh
+
+SRCDBPREFIX=/var/db/srcdb
+
+FILESTORE=/etc/srcdb.download
+
+SPECPREFIX="1 2 3 4 5 6 7 8 9 0 A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z"
+
+
+usage() {
+    echo "usage: $0 [-p prefix] -o import [-k] -n NAME -v VER -s SRCNAME -u URL"
+    echo "usage: $0 [-p prefix] -o loadfrom [-k] -f FILENAME -d DELIMITER -e PREPEND"
+    echo "usage: $0 [-p prefix] -o download -n NAME -v VER"
+    echo "usage: $0 [-p prefix] -o info -n NAME -v VER"
+    echo "usage: $0 [-p prefix] -o getall [-f FILENAME]"
+    echo "usage: $0 [-p prefix] -o delete -n NAME [-v VER]"
+    echo "usage: $0 [-p prefix] -o list"
+    echo "usage: $0 [-p prefix] -o checkdb"
+    echo "usage: $0 [-p prefix] -o purgedb"
+    echo "usage: $0 [-p prefix] -o backupdb"
+    echo "usage: $0 [-p prefix] -o installdb -f FILENAME|URL"
+    echo ""
+    exit 1
+}
+
+checkfile() {
+
+    if [ -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.nocheck ];then
+        echo "skipping checksum verification..."
+        OK=1
+    else
+
+        TYPE=`file ${SRCDBPREFIX}/src/$SRCNAME | awk '{ print $2}' `
+
+        TDIR=`mktemp -dq /var/tmp/tmp.XXXXXX`
+        if [ $? -ne 0 ]; then
+            echo "srcdb: Can't create temp directory, exiting..."
+            exit 1
+        fi
+
+        case $TYPE in
+            gzip)
+                zcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+            ;;
+            bzip2)
+                bzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+            ;;
+            xz|XZ)
+                xzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+            ;;
+            Zip)
+                unzip -q -d $TDIR ${SRCDBPREFIX}/src/$SRCNAME
+            ;;
+            empty)
+                echo "Empty file"
+                rm ${SRCDBPREFIX}/src/$SRCNAME
+                rm -r $TDIR
+                exit 1
+            ;;
+            *)
+                echo "Unrecognized compression format"
+                rm -r $TDIR
+                exit 1
+            ;;
+        esac
+
+        echo "checking sum.md5.bz2..."
+        TMPFILE1=`mktemp -q /var/tmp/srcdb.XXXXXX`
+        TMPFILE2=`mktemp -q /var/tmp/srcdb.XXXXXX`
+
+
+        if [ -f /sbin/md5 ];then
+            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
+        elif [ -f /usr/bin/md5sum ];then
+            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
+        fi
+        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" >> /var/tmp/dwnldsum
+        cat /var/tmp/dwnldsum | sort > $TMPFILE1
+        rm /var/tmp/dwnldsum
+
+        #sort produces different result on different platforms, so we better re-sort before comparison
+        bzcat ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 | grep -v '/\._' | sort > $TMPFILE2
+        RESULT=`diff -q $TMPFILE1 $TMPFILE2`
+        rm $TMPFILE1 $TMPFILE2
+        rm -r $TDIR
+
+        if [ "x$RESULT" != "x" ];then
+            echo "$SRCNAME md5 checksum failed ($RESULT)"
+            rm ${SRCDBPREFIX}/src/$SRCNAME
+            OK=0
+        else
+            OK=1
+        fi
+    fi
+}
+
+#
+# Check arguments first
+#
+
+CONTINUE=0
+
+if [ $# -eq 0 ];then
+    usage
+else
+    while [ $# -gt 0 ];
+    do
+        case $1 in
+            -p)
+                shift
+                SRCDBPREFIX=$1
+            ;;
+            -d)
+                shift
+                DELIMITER=$1
+            ;;
+            -e)
+                shift
+                PREPEND=$1
+            ;;
+            -f)
+                shift
+                IMPORTLIST=$1
+            ;;
+            -k)
+                shift
+                KEEPSRC=1
+            ;;
+            -o)
+                shift
+                case $1 in
+                    import)
+                        OPERATION=import 
+                    ;;
+                    download)
+                        OPERATION=download 
+                    ;;
+                    info)
+                        OPERATION=info 
+                    ;;
+                    getall)
+                        OPERATION=getall 
+                    ;;
+                    loadfrom)
+                        OPERATION=loadfrom 
+                    ;;
+                    list)
+                        OPERATION=list 
+                    ;;
+                    backupdb)
+                        OPERATION=backupdb
+                    ;;
+                    checkdb)
+                        OPERATION=checkdb
+                    ;;
+                    purgedb)
+                        OPERATION=purgedb
+                    ;;
+                    installdb)
+                        OPERATION=installdb
+                    ;;
+                    delete)
+                        OPERATION=delete 
+                    ;;
+                    *)
+                        usage
+                    ;;
+                esac 
+            ;;
+            -n)
+                shift
+                if [ 'x$1' != 'x' ];then
+                    NAME=$1
+                else
+                    usage
+                fi
+            ;;
+            -v)
+                shift
+                if [ 'x$1' != 'x' ];then
+                    VER=$1
+                else
+                    usage
+                fi
+            ;;
+            -s)
+                shift
+                if [ 'x$1' != 'x' ];then
+                    SRCNAME=$1
+                else
+                    usage
+                fi
+            ;;
+            -u|--url)
+                shift
+                if [ 'x$1' != 'x' ];then
+                    URL=$1
+                else
+                    usage
+                fi
+            ;;
+            *)
+                usage
+            ;;
+        esac
+        shift
+    done
+fi
+
+#
+# Check if all required binaries are present 
+#
+
+for i in which zcat bzcat xzcat rm find mktemp sort mkdir awk tar sed cat mv chmod uniq ls basename diff dirname grep date xz read
+do
+    j=`which $i`
+    if [ "x$j" = "x" ];then
+        echo "$i is missing on your system..."
+        exit
+    fi
+done
+
+if [ -f /usr/bin/fetch ];then
+
+        grep no-verify /usr/bin/fetch > /dev/null 2>&1
+        if [ $? = 0 ];then
+            FETCHOPTS="--no-verify-peer --no-verify-hostname"
+        fi
+fi
+
+#echo $FETCHOPTS
+
+if [ ! -d ${SRCDBPREFIX}/src ];then
+    mkdir -p ${SRCDBPREFIX}/src
+fi
+
+#echo "srcdb -o $OPERATION -n $NAME -v $VER -s $SRCNAME -u $URL"
+
+if [ x$OPERATION = 'ximport' ];then
+
+    if [ ! -d ${SRCDBPREFIX}/db ];then
+        mkdir -p ${SRCDBPREFIX}/db
+    fi
+
+    if [ "x$NAME" = x -o "x$VER" = x -o "x$SRCNAME" = x -o "x$URL" = x ];then
+        usage
+    fi
+
+    if [ ! -d ${SRCDBPREFIX}/db/$NAME/$VER ];then
+        mkdir -p ${SRCDBPREFIX}/db/$NAME/$VER
+    fi
+
+    if [ -f /usr/bin/fetch ];then
+        /usr/bin/fetch $FETCHOPTS -o ${SRCDBPREFIX}/src/$SRCNAME $URL 
+    elif [ -f /usr/bin/wget ];then
+        /usr/bin/wget --no-check-certificate -O ${SRCDBPREFIX}/src/$SRCNAME $URL 
+    fi
+
+    TDIR=`mktemp -dq /var/tmp/tmp.XXXXXX`
+    if [ $? -ne 0 ]; then
+        echo "srcdb: Can't create temp directory, exiting..."
+        exit 1
+    fi
+
+    TYPE=`file ${SRCDBPREFIX}/src/$SRCNAME | awk '{ print $2}' `
+
+    case $TYPE in
+        gzip)
+            zcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+        ;;
+        bzip2)
+            bzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+        ;;
+        xz|XZ)
+            xzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+        ;;
+        Zip)
+            unzip -q -d $TDIR ${SRCDBPREFIX}/src/$SRCNAME
+        ;;
+        *)
+            echo "Unrecognized compression format"
+            exit 1
+        ;;
+    esac;
+
+    if [ ! -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 ];then
+        echo "sum.md5.bz2 not found, creating..."
+        if [ -f /sbin/md5 ];then
+            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" | sort > /var/tmp/srcdbsumcandidate
+        elif [ -f /usr/bin/md5sum ];then
+            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" | sort > /var/tmp/srcdbsumcandidate
+        fi
+        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" | sort >> /var/tmp/srcdbsumcandidate
+        cat /var/tmp/srcdbsumcandidate | bzip2 > ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2
+        rm /var/tmp/srcdbsumcandidate
+    else
+        echo "sum.md5.bz2 found, checking..."
+        TMPFILE1=`mktemp -q /var/tmp/srcdb.XXXXXX`
+        TMPFILE2=`mktemp -q /var/tmp/srcdb.XXXXXX`
+
+        if [ -f /sbin/md5 ];then
+            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" | sort > /var/tmp/dwnldsum
+        elif [ -f /usr/bin/md5sum ];then
+            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" | sort > /var/tmp/dwnldsum
+        fi
+        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" | sort >> /var/tmp/dwnldsum
+        cat /var/tmp/dwnldsum | sort > $TMPFILE1
+        rm /var/tmp/dwnldsum
+
+        #sort produces different result on different platforms, so we better re-sort before comparison
+        bzcat ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 | grep -v '/\._' | sort > $TMPFILE2
+        RESULT=`diff -q $TMPFILE2 $TMPFILE1`
+        rm $TMPFILE1 $TMPFILE2
+
+        if [ "x$RESULT" != "x" ];then
+            echo "$SRCNAME md5 checksum failed ($RESULT)"
+            exit 1
+        fi;
+    fi
+
+    rm -r $TDIR
+    [ x$KEEPSRC = x1 ] || rm ${SRCDBPREFIX}/src/$SRCNAME
+
+    echo $URL >> ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.url
+    TMPFILE=`mktemp -q /var/tmp/srcdb.XXXXXX`
+    if [ $? -ne 0 ]; then
+        echo "srcdb: Can't create temp file, exiting..."
+        exit 1
+    fi
+
+    cat ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.url | sort | uniq > $TMPFILE
+    mv $TMPFILE ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.url
+    chmod 644 ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.url
+
+elif [ x$OPERATION = 'xdownload' ];then
+
+    if [ "x$NAME" = x -o "x$VER" = x ];then
+        usage
+    fi
+
+    if [ ! -d ${SRCDBPREFIX}/db/$NAME/$VER ];then
+        echo "$NAME-$VER not found (try importing $NAME-$VER first)"
+        exit 1
+    fi
+    if [ ! -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 ];then
+        echo "sum.md5.bz2 for $NAME-$VER not found (try importing $NAME-$VER first)"
+        exit 1
+    fi
+
+    OK=0
+
+    if [ -f ${FILESTORE} ];then
+
+
+        for i in `ls ${SRCDBPREFIX}/db/$NAME/$VER/*.url`
+        do
+
+            SRCNAME=`basename $i .url`
+
+            for j in `cat ${FILESTORE}`
+            do
+
+                echo "downloading $SRCNAME from $j"
+                if [ -f /usr/bin/fetch ];then
+                    /usr/bin/fetch $FETCHOPTS -o ${SRCDBPREFIX}/src/$SRCNAME $j/$SRCNAME
+                elif [ -f /usr/bin/wget ];then
+                    /usr/bin/wget --no-check-certificate -O ${SRCDBPREFIX}/src/$SRCNAME $j/$SRCNAME
+                fi
+
+                if [ $? != "0" ];then
+                    continue
+                fi
+
+                checkfile
+
+                if [ $OK -eq 1 ];then
+                    break
+                fi
+
+            done
+            if [ $OK -eq 1 ];then
+                break
+            fi
+        done
+
+    fi 
+
+    if [ $OK -eq 0 ];then
+   
+
+        for i in `ls ${SRCDBPREFIX}/db/$NAME/$VER/*.url`
+        do
+
+            SRCNAME=`basename $i .url`
+            OK=0;
+            for j in `cat $i`
+            do 
+                URL=$j
+
+                echo "downloading $SRCNAME from $URL"
+                if [ -f /usr/bin/fetch ];then
+                    /usr/bin/fetch $FETCHOPTS -o ${SRCDBPREFIX}/src/$SRCNAME $URL 
+                elif [ -f /usr/bin/wget ];then
+                    /usr/bin/wget --no-check-certificate -O ${SRCDBPREFIX}/src/$SRCNAME $URL 
+                fi
+
+                if [ $? != "0" ];then
+                    continue
+                fi
+
+                checkfile
+
+                if [ $OK -eq 1 ];then
+                    break
+                fi
+            done
+            if [ $OK -eq 1 ];then
+                break
+            fi
+        done
+
+    fi
+
+elif [ x$OPERATION = 'xinfo' ];then
+
+    if [ "x$NAME" = x -o "x$VER" = x ];then
+        usage
+    fi
+    if [ ! -d ${SRCDBPREFIX}/db/$NAME/$VER ];then
+        echo "$NAME-$VER not found (try importing $NAME-$VER first)"
+        exit 1
+    fi
+
+    echo "info $NAME $VER" >> /var/tmp/srcdb.debug
+
+    OK=0
+    for i in `ls ${SRCDBPREFIX}/db/$NAME/$VER/*.url`
+    do
+
+        SRCNAME=`basename $i .url`
+        if [ -f ${SRCDBPREFIX}/src/$SRCNAME ];then
+            echo "${SRCDBPREFIX}/src/$SRCNAME"
+            OK=1
+            break
+        fi
+    done
+    if [ $OK -eq 0 ];then
+        echo "Not found"
+    fi
+
+elif [ x$OPERATION = 'xgetall' ];then
+
+
+    if [ "x${IMPORTLIST}" = "x" ];then
+        LIST=`find ${SRCDBPREFIX}/db -type d | sed -e "s@${SRCDBPREFIX}/db@@" -e "s@^/@@"| grep "/" | sort`
+    else
+        if [ -f ${IMPORTLIST} ];then
+            LIST=`cat ${IMPORTLIST}`
+        else
+            echo "${IMPORTLIST} not found"
+            exit 1
+        fi
+    fi
+
+    for i in $LIST
+    do
+        name=`echo $i | sed -e 's@/.*$@@'`
+        ver=`echo $i | sed -e "s@^.*/@@"`
+   
+        echo "Checking $name-$ver... "
+        r=`srcdb -p ${SRCDBPREFIX} -o info -n $name -v $ver` 
+        if [ "x$r" = "xNot found" ];then 
+            srcdb -p ${SRCDBPREFIX} -o download -n $name -v $ver
+        fi
+    done
+
+elif [ x$OPERATION = 'xloadfrom' ];then
+
+    if [ "x$IMPORTLIST" = x ];then
+        usage
+    fi
+
+    if [ ! -f $IMPORTLIST ];then
+        echo "$IMPORTLIST not found"
+        exit 1
+    fi
+
+    if [  "x$DELIMITER" = x ];then
+        echo "Delimeter not specified"
+        exit 1
+    fi
+
+    
+    for i in `cat $IMPORTLIST`
+    do
+
+        filename=`basename $i`   
+        dirname=`dirname $i`
+
+        name=`echo $filename | sed -e "s/${DELIMITER}.*$//"`
+        suffix=`echo $filename | sed -e "s/^.*${DELIMITER}//"`
+        ver=`echo $suffix | sed -e "s/\.tar\.gz//" -e "s/\.tar\.bz2//" -e "s/\.tar\.xz//" -e "s/\.tgz//" -e "s/\.tbz//" -e "s/\.zip//"`
+
+        echo "Importing $name-$ver..."
+        if [ x$KEEPSRC = x1 ];then
+          srcdb -p ${SRCDBPREFIX} -o import -k -n ${name} -v ${ver} -s ${name}-${suffix} -u ${PREPEND}/${dirname}/${name}-${suffix}
+        else
+          srcdb -p ${SRCDBPREFIX} -o import -n ${name} -v ${ver} -s ${name}-${suffix} -u ${PREPEND}/${dirname}/${name}-${suffix}
+        fi
+
+    done
+
+elif [ x$OPERATION = 'xlist' ];then
+    for i in `find ${SRCDBPREFIX}/db -type d | sed -e "s@${SRCDBPREFIX}/db@@" -e "s@^/@@"| grep "/" | sort`
+    do
+        echo "$i"
+    done
+
+elif [ x$OPERATION = 'xdelete' ];then
+
+    if [ "x$NAME" = x ];then
+        usage
+    fi
+
+    if [ "x$VER" = x ];then
+        read -p "Are you sure you want to delete all versions of $NAME? (y/n)" N
+        [ "x$N" = "xy" ] && rm -r ${SRCDBPREFIX}/db/$NAME
+    else
+        read -p "Are you sure you want to delete $NAME-$VER? (y/n)" N
+        [ "x$N" = "xy" ] && rm -r ${SRCDBPREFIX}/db/$NAME/$VER
+    fi
+
+elif [ x$OPERATION = 'xbackupdb' ];then
+
+    echo -n "Backing up db from ${SRCDBPREFIX}... "
+    tar -cf - -C ${SRCDBPREFIX} db | xz > srcdb-db-`date "+%Y%m%d%H%M%S"`.tar.xz    
+    echo "done"
+
+elif [ x$OPERATION = 'xcheckdb' ];then
+
+    AMMOPREFIX=/usr/share/spdpo
+    INCLUDE=include
+
+    for i in $SPECPREFIX
+    do
+        DB_NAMES=`ls -d /var/db/srcdb/db/$i* 2>/dev/null`
+
+        for j in $DB_NAMES
+        do
+            N=`basename $j`
+            for k in `ls -d $j/* 2>/dev/null`
+            do
+                V=`basename $k`
+
+                _found=0
+                for l in `ls $AMMOPREFIX`
+                do
+                    f=`basename $l`
+                    if [ -f $AMMOPREFIX/$f/$INCLUDE/$N ];then
+
+                        . $AMMOPREFIX/$f/$INCLUDE/$N
+
+                        if [ x$NAME = x$N ];then
+                            if [ x$VER = x$V ];then
+                                _found=1
+                            fi
+                        fi
+                    fi
+                done
+                if [ $_found = 0 ];then
+                    echo "$N-$V not found"
+                fi
+            done
+        done
+    done
+
+elif [ x$OPERATION = 'xpurgedb' ];then
+
+    AMMOPREFIX=/usr/share/spdpo
+    INCLUDE=include
+
+    for i in $SPECPREFIX
+    do
+        DB_NAMES=`ls -d /var/db/srcdb/db/$i* 2>/dev/null`
+
+        for j in $DB_NAMES
+        do
+            N=`basename $j`
+            for k in `ls -d $j/* 2>/dev/null`
+            do
+                V=`basename $k`
+
+                _found=0
+                for l in `ls $AMMOPREFIX`
+                do
+                    f=`basename $l`
+                    if [ -f $AMMOPREFIX/$f/$INCLUDE/$N ];then
+
+                        . $AMMOPREFIX/$f/$INCLUDE/$N
+
+                        if [ x$NAME = x$N ];then
+                            if [ x$VER = x$V ];then
+                                _found=1
+                            fi
+                        fi
+                    fi
+                done
+                if [ $_found = 0 ];then
+                     srcdb -o delete -n $N -v $V
+                fi
+            done
+        done
+    done
+
+
+elif [ x$OPERATION = 'xinstalldb' ];then
+
+    mkdir -p /var/tmp
+
+    if [ -z ${IMPORTLIST} ];then
+        echo "Filename or URL not specified" 
+        exit 1
+    fi
+
+    if [ -d ${SRCDBPREFIX}/db ];then
+        echo "srcdb detected in ${SRCDBPREFIX}. Aborting" 
+        exit 1
+    fi
+
+    echo ${IMPORTLIST} | grep "^http://\|^ftp://\|^https://" > /dev/null
+
+    if [ $? = 0 ]; then
+
+        echo "Downloading ${IMPORTLIST}... "
+        if [ -f /usr/bin/fetch ];then
+            /usr/bin/fetch $FETCHOPTS -o /var/tmp/srcdb-db.tar.xz ${IMPORTLIST} 
+        elif [ -f /usr/bin/wget ];then
+            /usr/bin/wget --no-check-certificate -O /var/tmp/srcdb-db.tar.xz ${IMPORTLIST} 
+        fi
+        if [ $? != "0" ];then
+            exit 1
+        fi
+
+        echo -n "Installing db to ${SRCDBPREFIX}... "
+        xzcat /var/tmp/srcdb-db.tar.xz | tar -x -C ${SRCDBPREFIX} -f -        
+        echo "done"
+
+        rm /var/tmp/srcdb-db.tar.xz
+
+    elif [ -f ${IMPORTLIST} ];then
+        echo -n "Installing db to ${SRCDBPREFIX}... "
+        xzcat ${IMPORTLIST} | tar -x -C ${SRCDBPREFIX} -f -        
+        echo "done"
+    else
+        echo "${IMPORTLIST} not found"
+        exit 1
+    fi
+else
+    usage
+fi
+
+

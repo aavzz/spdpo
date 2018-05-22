@@ -1,0 +1,31 @@
+.TH SPDPO-SPLIT 1 "2017-03-03" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fBspdpo-split\fP \- create sub-package specification
+.SH SYNOPSIS
+spdpo-split -f \fIflavour\fP -n \fIpackage_name\fP -s \fIsuffix\fP
+.SH DESCRIPTION
+.PP
+\fBspdpo-split\fP is a shell script to automate the process of sub-package specification creation.
+.SH OPTIONS
+\fBspdpo\fP supports the following options:
+.TP
+.B -f \fIflavour\fP
+Specifies the variant (flavour) of the package(s) to build.
+.TP
+.B -n \fIpackage_name\fP
+Name of the main package.
+.TP
+.B -s \fIsuffix\fP
+Suffix to be added to the main part of the sub-package name. Currently the following suffices are supported: \fBdev doc exec gettext htdocs introspection misc perl python so go\fP.
+Defferent suffices mean different specification file contents. It proved convenient to further subdivide the \fBexec misc so\fP categories into \fBexec-... misc-... so-...\fP
+.SH GOTCHAS
+Suffix of a subpackage must not be substring of the suffix of another subpackage of the same main package. E.g. you must avoid this naming: \fBfoo::bar\fP, \fBfoo::bar-baz\fP.
+.SH SEE ALSO
+\fBsrcdb\fP(\fB1\fP)
+\fBspdpo\fP(\fB1\fP)
+.SH BUGS
+Send bug reports to <aavzz@yandex.ru>
+.SH AUTHOR
+Alex Zimnitsky

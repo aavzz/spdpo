@@ -1,0 +1,60 @@
+.TH IMAGEFACTORY 1 "2017-03-18" "AAVZZ"
+.ds dc \fIdc\fP
+.ds Dc \fIDc\fP
+.SH NAME
+\fBimagefactory\fP \- OS image prepatation tool
+.SH SYNOPSIS
+
+\fBimagefactory\fP [\fB-d|-f\fP] \fItarget\fP 
+
+\fBimagefactory\fP \fB-s\fP \fIURL|FILE\fP
+
+\fBimagefactory\fP \fB-b\fP
+
+.SH DESCRIPTION
+.PP
+\fBimagefactory\fP Is a helper tool for preparation of OS images.
+
+.SH OPERATION
+\fBimagefacrory\fP expects the user to provide code to execute in the form of shell procedures. The user-defined shell procedures are
+executed in a taskqueue. 
+
+\fBimagefactory\fP also provides means to ensure that necessary variables are set by the user before actual execution starts.
+This is done by including needed variable names in the variable \fBVARS\fP. 
+
+A typical use of \fBimagefactory\fP is as follows:
+
+1. Create a file with shell procedures, put their names into variable \fBTASKS\fP
+and place this file in the \fIimagefactory_library\fP. If you need to enforce some variables to be defined by the user, put their names into
+the \fBVARS\fP variable.
+
+2. In the configuration directory (the directory where the main configuration file lives) create a file named after the target. Include the file
+from the \fIimagefactory_library\fP in it as follows:
+
+    . ${IMAGEFACTORYLIB}/some_file
+
+and set necessary variables.
+
+3. You are done! Now its possible to invoke \fBimagefactory\fP:
+
+    \fBimagefactory target\fP
+.SH OPTIONS
+\fBimagefactory\fP may be invoked with the following command line options:
+.TP
+.B -b
+Backup library. \fBimagefactory\fP will create inthe current directory xzipped tarfile containing its library.
+.TP
+.B -d
+Debug mode. \fBimagefactory\fP will stop and wait for the `enter` key to be pressed after executing each user-defined procedure.
+.TP
+.B -f
+Sets \fBFORCE\fP variable for your script to use it if necessary.
+.TP
+.B -s \fIURL|FILE\f
+Installs \fIimagefactory_library\fP from file or URL.
+.SH SEE ALSO
+imagefactory.conf(5)
+.SH BUGS
+Send bug reports to <a@sinnumero.net>
+.SH AUTHOR
+Alex Zimnitsky

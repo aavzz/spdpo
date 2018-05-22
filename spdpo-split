@@ -1,0 +1,497 @@
+#!/bin/sh
+
+#/////////////////////////////////////////////////////////////////////////////
+#
+# Color definitions
+#
+#/////////////////////////////////////////////////////////////////////////////
+
+_r="\033[31m"
+_y="\033[33m"
+_b="\033[34m"
+_n="\033[0m"
+
+
+#/////////////////////////////////////////////////////////////////////////////
+#
+# Subroutines
+#
+#/////////////////////////////////////////////////////////////////////////////
+
+
+usage() {
+    echo "usage: spdpo-split -f flavour -n package_name -s suffix"
+    exit 1
+}
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+#/////////////////////////////////////////////////////////////////////////////////
+#
+# Check arguments
+#
+#/////////////////////////////////////////////////////////////////////////////////
+
+
+PKGNAME="."
+
+if [ $# -eq 0 ];then
+    usage
+else
+    while [ $# -gt 0 ];
+    do
+        case $1 in
+            -f)
+                shift
+                FLAVOUR=$1
+            ;;
+            -s)
+                shift
+                SUFFIX=$1
+            ;;
+            *)
+                PKGNAME=$1
+                #preliminary include
+                . /etc/spdpo.conf
+                _INC=`cd $BUNDLEDIR/.. && find . -name $PKGNAME -type f`
+                INCLUDE=`dirname $_INC`
+
+
+                break
+            ;;
+
+        esac
+        shift
+    done
+fi
+
+
+#///////////////////////////////////////////////////////////////////////////////////
+#
+# Include necessary configuration files 
+#
+#///////////////////////////////////////////////////////////////////////////////////
+
+. /etc/spdpo.conf
+
+if [ -f $WDIR/$PKGNAME ];then
+    . $WDIR/$PKGNAME
+else
+    echo "File not found $WDIR/$PKGNAME"
+    exit 1
+fi
+
+
+#///////////////////////////////////////////////////////////////////////////
+#
+# Check if the subpackage definition already exists
+#
+#///////////////////////////////////////////////////////////////////////////
+
+
+if [ -f $WDIR/$PKGNAME::$SUFFIX ];then
+    echo "$WDIR/$PKGNAME::$SUFFIX already exists"
+    exit 0
+fi
+
+#///////////////////////////////////////////////////////////////////////////
+#
+# Create subpackage definition
+#
+#///////////////////////////////////////////////////////////////////////////
+
+SNAME=$NAME::$SUFFIX
+INAME=$NAME--$SUFFIX #some makefiles do not permit using : in path
+
+if [ $SUFFIX = "full" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+COMMENT="$COMMENT"
+DESCR="$DESCR"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+elif [ $SUFFIX = "dev" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=$NAME::so
+
+POSTPROCESS_0="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.so.*' -delete"
+POSTPROCESS_1="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.so' -delete"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && find \$DDIR/\$INAME-\$VER/usr/bin ! -name '*-config' -delete"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man1 ] && find \$DDIR/\$INAME-\$VER/usr/share/man/man1 ! -name '*-config.1' -delete"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man5"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man8 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man8"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/lib/girepository-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/girepository-1.0"
+POSTPROCESS_16="[ -d \$DDIR/\$INAME-\$VER/usr/share/gir-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gir-1.0"
+POSTPROCESS_17="[ -d \$DDIR/\$INAME-\$VER/usr/lib/perl5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/perl5"
+POSTPROCESS_18="[ -d \$DDIR/\$INAME-\$VER/usr/lib/python2.7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/python2.7"
+POSTPROCESS_19="rm \$DDIR/\$INAME-\$VER/usr/lib/charset.alias"
+
+COMMENT="$COMMENT (headers & libs)"
+DESCR="$DESCR (headers & libs)"
+
+EOF
+    echo "$SNAME created. Now you may check it"
+elif [ $SUFFIX = "exec" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS="$NAME::so"
+
+POSTPROCESS_0="find \$DDIR/\$INAME-\$VER/usr/bin -name '*-config' -delete"
+POSTPROCESS_1="find \$DDIR/\$INAME-\$VER/usr/share/man/man1 -name '*-config.1' -delete"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/lib ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man3 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man3"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man7"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/share/aclocal ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/aclocal"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/share/gir-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gir-1.0"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/etc ] && mv \$DDIR/\$INAME-\$VER/etc \$DDIR/\$INAME-\$VER/etc-dist"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/var ] && rm -r \$DDIR/\$INAME-\$VER/var"
+
+COMMENT="$COMMENT (executables)"
+DESCR="$DESCR (executables)"
+
+EOF
+    echo "$SNAME created. Now you may check it"
+elif [ $SUFFIX = "doc" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/bin ] && rm -r \$DDIR/\$INAME-\$VER/bin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/lib ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/usr/share/man ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/share/aclocal ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/aclocal"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/share/gir-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gir-1.0"
+
+COMMENT="$COMMENT (additional documentation)"
+DESCR="$DESCR (additional documentation)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+elif [ $SUFFIX = "so" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.a' -delete"
+POSTPROCESS_1="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.la' -delete"
+POSTPROCESS_2="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.sh' -delete"
+POSTPROCESS_3="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.h' -delete"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share ] && rm -r \$DDIR/\$INAME-\$VER/usr/share"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/bin ] && rm -r \$DDIR/\$INAME-\$VER/bin"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/lib/$NAME-\$VER ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/$NAME-\$VER"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/lib/cmake ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/cmake"
+POSTPROCESS_16="[ -d \$DDIR/\$INAME-\$VER/usr/lib/girepository-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/girepository-1.0"
+POSTPROCESS_17="[ -d \$DDIR/\$INAME-\$VER/usr/lib/ckport ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/ckport"
+POSTPROCESS_18="[ -d \$DDIR/\$INAME-\$VER/usr/lib/perl5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/perl5"
+POSTPROCESS_19="[ -d \$DDIR/\$INAME-\$VER/usr/lib/python2.7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/python2.7"
+POSTPROCESS_20="rm \$DDIR/\$INAME-\$VER/usr/lib/charset.alias"
+
+COMMENT="$COMMENT (shared libs)"
+DESCR="$DESCR (shared libs)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+elif [ $SUFFIX = "gettext" ];then
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/usr/share/man ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/bin ] && rm -r \$DDIR/\$INAME-\$VER/bin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/share/aclocal ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/aclocal"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/share/gir-1.0 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gir-1.0"
+POSTPROCESS_14="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so.*"
+POSTPROCESS_15="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so"
+POSTPROCESS_16="rm \$DDIR/\$INAME-\$VER/usr/lib/*.a"
+POSTPROCESS_17="rm \$DDIR/\$INAME-\$VER/usr/lib/*.la"
+POSTPROCESS_18="rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_19="rm -r \$DDIR/\$INAME-\$VER/usr/lib/glib-2.0"
+POSTPROCESS_20="rm -r \$DDIR/\$INAME-\$VER/usr/lib/gio"
+
+
+COMMENT="$COMMENT (.mo files)"
+DESCR="$DESCR (.mo files)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+
+elif [ $SUFFIX = "introspection" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.so.*' -delete"
+POSTPROCESS_1="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.so' -delete"
+POSTPROCESS_2="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.a' -delete"
+POSTPROCESS_3="find \$DDIR/\$INAME-\$VER/usr/lib -name '*.la' -delete"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/man ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_16="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_17="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_18="[ -d \$DDIR/\$INAME-\$VER/usr/lib/aclocal ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/aclocal"
+
+COMMENT="$COMMENT (introspection)"
+DESCR="$DESCR (introspection)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+
+elif [ $SUFFIX = "perl" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=perl::perl
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/lib/python2.7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/python2.7"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man1 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man1"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man7"
+POSTPROCESS_16="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so"
+POSTPROCESS_17="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so.*"
+POSTPROCESS_18="rm \$DDIR/\$INAME-\$VER/usr/lib/*.a"
+POSTPROCESS_19="rm \$DDIR/\$INAME-\$VER/usr/lib/*.la"
+
+COMMENT="$COMMENT (perl module)"
+DESCR="$DESCR (perl module)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+
+
+elif [ $SUFFIX = "python" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/lib/perl5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/perl5"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man1 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man1"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man7"
+POSTPROCESS_16="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so"
+POSTPROCESS_17="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so.*"
+POSTPROCESS_18="rm \$DDIR/\$INAME-\$VER/usr/lib/*.a"
+POSTPROCESS_19="rm \$DDIR/\$INAME-\$VER/usr/lib/*.la"
+
+COMMENT="$COMMENT (python module)"
+DESCR="$DESCR (python module)"
+ 
+EOF
+
+    echo "$SNAME created. Now you may check it"
+
+elif [ $SUFFIX = "go" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/lib/perl5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/perl5"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/lib/python2.7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/python2.7"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man1 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man1"
+POSTPROCESS_16="[ -d \$DDIR/\$INAME-\$VER/usr/share/man/man7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man/man7"
+
+COMMENT="$COMMENT (go module)"
+DESCR="$DESCR (go module)"
+
+EOF
+
+    echo "$SNAME created. Now you may check it"
+
+elif [ $SUFFIX = "htdocs" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/bin ] && rm -r \$DDIR/\$INAME-\$VER/bin"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr ] && rm -r \$DDIR/\$INAME-\$VER/usr"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+
+COMMENT="$COMMENT (www files)"
+DESCR="$DESCR (www files)"
+
+EOF
+
+
+elif [ $SUFFIX = "misc" ];then
+
+    cat << EOF > $WDIR/$PKGNAME::$SUFFIX
+ 
+NAME=$SNAME
+INAME=$INAME
+
+DEPS=
+
+POSTPROCESS_0="[ -d \$DDIR/\$INAME-\$VER/sbin ] && rm -r \$DDIR/\$INAME-\$VER/sbin"
+POSTPROCESS_1="[ -d \$DDIR/\$INAME-\$VER/usr/bin ] && rm -r \$DDIR/\$INAME-\$VER/usr/bin"
+POSTPROCESS_2="[ -d \$DDIR/\$INAME-\$VER/usr/sbin ] && rm -r \$DDIR/\$INAME-\$VER/usr/sbin"
+POSTPROCESS_3="[ -d \$DDIR/\$INAME-\$VER/usr/libexec ] && rm -r \$DDIR/\$INAME-\$VER/usr/libexec"
+POSTPROCESS_4="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_5="[ -d \$DDIR/\$INAME-\$VER/usr/share/gtk-doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/gtk-doc"
+POSTPROCESS_6="[ -d \$DDIR/\$INAME-\$VER/usr/share/info ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/info"
+POSTPROCESS_7="[ -d \$DDIR/\$INAME-\$VER/etc ] && rm -r \$DDIR/\$INAME-\$VER/etc"
+POSTPROCESS_8="[ -d \$DDIR/\$INAME-\$VER/usr/share/locale ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/locale"
+POSTPROCESS_9="[ -d \$DDIR/\$INAME-\$VER/usr/share/doc ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/doc"
+POSTPROCESS_10="[ -d \$DDIR/\$INAME-\$VER/usr/docs ] && rm -r \$DDIR/\$INAME-\$VER/usr/docs"
+POSTPROCESS_11="[ -d \$DDIR/\$INAME-\$VER/usr/include ] && rm -r \$DDIR/\$INAME-\$VER/usr/include"
+POSTPROCESS_12="[ -d \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/pkgconfig"
+POSTPROCESS_13="[ -d \$DDIR/\$INAME-\$VER/usr/lib/perl5 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/perl5"
+POSTPROCESS_14="[ -d \$DDIR/\$INAME-\$VER/usr/lib/python2.7 ] && rm -r \$DDIR/\$INAME-\$VER/usr/lib/python2.7"
+POSTPROCESS_15="[ -d \$DDIR/\$INAME-\$VER/usr/share/man ] && rm -r \$DDIR/\$INAME-\$VER/usr/share/man"
+POSTPROCESS_16="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so"
+POSTPROCESS_17="rm \$DDIR/\$INAME-\$VER/usr/lib/*.so.*"
+POSTPROCESS_18="rm \$DDIR/\$INAME-\$VER/usr/lib/*.a"
+POSTPROCESS_19="rm \$DDIR/\$INAME-\$VER/usr/lib/*.la"
+POSTPROCESS_20="[ -d \$DDIR/\$INAME-\$VER/var/htdocs ] && rm -r \$DDIR/\$INAME-\$VER/var/htdocs"
+
+COMMENT="$COMMENT (misc files)"
+DESCR="$DESCR (misc files)"
+
+EOF
+        
+    echo "$SNAME created. Now you may check it"
+
+
+else
+
+    echo "Unknown suffix: $SUFFIX"
+
+fi
+
+
+
