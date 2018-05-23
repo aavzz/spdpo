@@ -35,36 +35,23 @@ create_install_CD() {
 
     # Create installer
     env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_PKG
-
-    # Fine-tune installer
-    cp ${BDIR}/${TARGET}/rc.local ${BDIR}/${TARGET}/newcd/etc-dist
-    cp ${BDIR}/${TARGET}/install.sh ${BDIR}/${TARGET}/newcd
-    echo '/dev/cd0 / cd9660 ro 0 0' > ${BDIR}/${TARGET}/newcd/etc-dist/fstab
     cp -Rp ${BDIR}/${TARGET}/newcd/etc-dist ${BDIR}/${TARGET}/newcd/etc
-#    ln -s libncurses.so.6.1 ${BDIR}/${TARGET}/newcd/lib/libncurses.so.5.9
-    echo "devd_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-#    echo "rc_debug=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-#    echo "rc_info=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "syslogd_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "cron_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "root_rw_mount=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "update_motd=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "hostid_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "ip6addrctl_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "entropy_file=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "hostname=v7os-installer" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "background_fsck=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "cleanvar_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "populate_var=YES" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "gptboot_enable=NO" >> ${BDIR}/${TARGET}/newcd/etc/rc.conf
-    echo "hosts" >> ${BDIR}/${TARGET}/newcd/etc/host.conf
-    echo "" > ${BDIR}/${TARGET}/newcd/etc/mtree/BSD.sendmail.dist
+    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_CFGPKG
 
-    # Create local package repository
-    for i in $EDITIONS
+    for n in $EDITIONS
     do
-        mkdir -p ${BDIR}/${TARGET}/newcd/usr/packages-$i
-        cp /var/chroot/spdpo-$i/var/spool/spdpo/pkg/*-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$i
+        mkdir -p ${BDIR}/${TARGET}/newcd/usr/packages-$n
+        eval _pkgs=\"\$PKGS_${n}\"
+        for i in $_pkgs
+            k=`find $BUNDLEDIR -name $i -type f | head -n 1`
+            if [ x$k != x ];then
+                j=`grep "^VER=" $k | head -n 1 | sed -e 's/VER=//'`
+                [ -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ] || spdpo -f ${FLAVOUR} $i
+                cp /var/chroot/spdpo-$n/var/spool/spdpo/pkg/$i-$j::*-$n-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$n
+            else 
+                echo "specification file `$i' not found in $n"
+            fi
+        done
     done
 
     # Create iso image
@@ -192,15 +179,6 @@ else
     fi
 
     check_vars
-
-    mkdir -p ${BDIR}/${TARGET}
-
-    cat << EOF > ${BDIR}/${TARGET}/rc.local
-#!/bin/sh
-/install.sh
-EOF
-
-    CREATE_INSTALLMEDIA_INSTALLSCRIPT
 
     create_install_$MEDIATYPE
 
