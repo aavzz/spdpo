@@ -1145,6 +1145,11 @@ if [ x$BUILDTYPE != xPEAR -a x$VIRTUAL = xNO ];then
     fi
 fi
 
+if [ x$VIRTUAL = xYES ];then
+    echo "virtual" > ${CHROOT}-$_ed/$LDIR/$NAME-$VER-$_ed-$FLAVOUR
+    rm -r ${CHROOT}-$_ed/$DDIR/$NAME-$VER
+fi
+
 #//////////////////////////////////////////////////////////////////////////
 #
 # Clean up environment after build
