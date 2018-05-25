@@ -34,9 +34,17 @@ create_install_CD() {
     fi
 
     # Create installer
-    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_PKG
+
+    _p=`echo $V7OS_INSTALLER_PKG | awk -F :: '{print $1}'`
+    _k=`find $BUNDLEDIR -name $_p -type f | head -n 1`
+    _v=`grep "^VER=" $_k | head -n 1 | sed -e 's/VER=//'`
+    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_PKG-$_v-${INSTALLER_EDITION}-${FLAVOUR}-${ARCH}.txz
     cp -Rp ${BDIR}/${TARGET}/newcd/etc-dist ${BDIR}/${TARGET}/newcd/etc
-    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_CFGPKG
+
+    _p=`echo $V7OS_INSTALLER_CFGPKG | awk -F :: '{print $1}'`
+    _k=`find $BUNDLEDIR -name $_p -type f | head -n 1`
+    _v=`grep "^VER=" $_k | head -n 1 | sed -e 's/VER=//'`
+    env PKG_DBDIR=${BDIR}/${TARGET} pkg -r ${BDIR}/${TARGET}/newcd add /var/chroot/spdpo-$INSTALLER_EDITION/var/spool/spdpo/pkg/$V7OS_INSTALLER_CFGPKG-$_v-${INSTALLER_EDITION}-${FLAVOUR}-${ARCH}.txz
 
     for n in $EDITIONS
     do
