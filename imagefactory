@@ -43,17 +43,19 @@ create_install_CD() {
         mkdir -p ${BDIR}/${TARGET}/newcd/usr/packages-$n
         eval _pkgs=\"\$PKGS_${n}\"
         for i in $_pkgs
+        do
             k=`find $BUNDLEDIR -name $i -type f | head -n 1`
             if [ x$k != x ];then
                 j=`grep "^VER=" $k | head -n 1 | sed -e 's/VER=//'`
                 [ -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ] || spdpo -f ${FLAVOUR} $i
-                cp /var/chroot/spdpo-$n/var/spool/spdpo/pkg/$i-$j::*-$n-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$n
+                cp /var/chroot/spdpo-$n/var/spool/spdpo/pkg/$i::*-$j-$n-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$n
             else 
-                echo "specification file `$i' not found in $n"
+                echo "specification file '$i' not found in $n"
             fi
         done
     done
 
+    echo "Creating ISO image ${OUTIMG}..."
     # Create iso image
     if [ x${_SYSTEM} = xLinux ];then
         genisoimage -o ${IDIR}/${OUTIMG} -r -b boot/cdboot -no-emul-boot ${BDIR}/${TARGET}/newcd
@@ -180,6 +182,12 @@ else
 
     check_vars
 
+    if [ -d ${BDIR}/${TARGET} ]; then
+        echo "Cleaning ${BDIR}/${TARGET}..."
+        chflags -R noschg ${BDIR}/${TARGET}
+        rm -r ${BDIR}/${TARGET}
+    fi
+ 
     create_install_$MEDIATYPE
 
 fi
