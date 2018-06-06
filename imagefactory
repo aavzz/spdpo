@@ -33,6 +33,26 @@ create_install_CD() {
         exit 1
     fi
 
+    # build missing packages first
+
+    for n in $EDITIONS
+    do
+        eval _pkgs=\"\$PKGS_${n}\"
+        for i in $_pkgs
+        do
+            k=`find $BUNDLEDIR -name $i -type f | head -n 1`
+            if [ x$k != x ];then
+                j=`grep "^VER=" $k | head -n 1 | sed -e 's/VER=//'`
+                if [ ! -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ];then
+                    spdpo -f ${FLAVOUR} $i || exit 1
+                fi
+            else
+                echo "specification file '$i' not found in $n"
+                exit 1
+            fi
+        done
+    done
+
     # Create installer
 
     _p=`echo $V7OS_INSTALLER_PKG | awk -F :: '{print $1}'`
@@ -55,13 +75,19 @@ create_install_CD() {
             k=`find $BUNDLEDIR -name $i -type f | head -n 1`
             if [ x$k != x ];then
                 j=`grep "^VER=" $k | head -n 1 | sed -e 's/VER=//'`
-                [ -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ] || spdpo -f ${FLAVOUR} $i
-                cp /var/chroot/spdpo-$n/var/spool/spdpo/pkg/$i::*-$j-$n-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$n
-            else 
+                if [ -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ];then
+                    cp /var/chroot/spdpo-$n/var/spool/spdpo/pkg/$i::*-$j-$n-${FLAVOUR}-${ARCH}.txz ${BDIR}/${TARGET}/newcd/usr/packages-$n || exit 1
+                else
+                    echo "Something happend to $i-$j-$n-${FLAVOUR}"
+                    exit 1
+                fi
+            else
                 echo "specification file '$i' not found in $n"
+                exit 1
             fi
         done
     done
+
 
     echo "Creating ISO image ${OUTIMG}..."
     # Create iso image
