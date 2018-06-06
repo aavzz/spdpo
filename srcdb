@@ -30,66 +30,88 @@ checkfile() {
         OK=1
     else
 
-        TYPE=`file ${SRCDBPREFIX}/src/$SRCNAME | awk '{ print $2}' `
+        if [ -f ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5 ];then
+            echo "checking ${SRCNAME}.md5..."
+            if [ -f /sbin/md5 ];then
+                SUM1=`cat ${SRCDBPREFIX}/src/$SRCNAME | md5`
+            elif [ -f /usr/bin/md5sum ];then
+                SUM1=`cat ${SRCDBPREFIX}/src/$SRCNAME | md5sum`
+            fi
+            SUM2=`cat ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5`
 
-        TDIR=`mktemp -dq /var/tmp/tmp.XXXXXX`
-        if [ $? -ne 0 ]; then
-            echo "srcdb: Can't create temp directory, exiting..."
-            exit 1
-        fi
-
-        case $TYPE in
-            gzip)
-                zcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-            ;;
-            bzip2)
-                bzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-            ;;
-            xz|XZ)
-                xzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-            ;;
-            Zip)
-                unzip -q -d $TDIR ${SRCDBPREFIX}/src/$SRCNAME
-            ;;
-            empty)
-                echo "Empty file"
+            if [ "x$SUM1" != "x$SUM2" ];then
+                echo "$SRCNAME md5 checksum failed"
                 rm ${SRCDBPREFIX}/src/$SRCNAME
-                rm -r $TDIR
+                OK=0
+            else
+                OK=1
+            fi
+        elif [ -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 ];then
+
+            echo "checking sum.md5.bz2 (deprecated)..."
+            TYPE=`file ${SRCDBPREFIX}/src/$SRCNAME | awk '{ print $2}' `
+
+            TDIR=`mktemp -dq /var/tmp/tmp.XXXXXX`
+            if [ $? -ne 0 ]; then
+                echo "srcdb: Can't create temp directory, exiting..."
                 exit 1
-            ;;
-            *)
-                echo "Unrecognized compression format"
-                rm -r $TDIR
-                exit 1
-            ;;
-        esac
+            fi
 
-        echo "checking sum.md5.bz2..."
-        TMPFILE1=`mktemp -q /var/tmp/srcdb.XXXXXX`
-        TMPFILE2=`mktemp -q /var/tmp/srcdb.XXXXXX`
+            case $TYPE in
+                gzip)
+                    zcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+                ;;
+                bzip2)
+                    bzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+                ;;
+                xz|XZ)
+                    xzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
+                ;;
+                Zip)
+                    unzip -q -d $TDIR ${SRCDBPREFIX}/src/$SRCNAME
+                ;;
+                empty)
+                    echo "Empty file"
+                    rm ${SRCDBPREFIX}/src/$SRCNAME
+                    rm -r $TDIR
+                    exit 1
+                ;;
+                *)
+                    echo "Unrecognized compression format"
+                    rm -r $TDIR
+                    exit 1
+                ;;
+            esac
 
+            TMPFILE1=`mktemp -q /var/tmp/srcdb.XXXXXX`
+            TMPFILE2=`mktemp -q /var/tmp/srcdb.XXXXXX`
 
-        if [ -f /sbin/md5 ];then
-            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
-        elif [ -f /usr/bin/md5sum ];then
-            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
-        fi
-        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" >> /var/tmp/dwnldsum
-        cat /var/tmp/dwnldsum | sort > $TMPFILE1
-        rm /var/tmp/dwnldsum
+            if [ -f /sbin/md5 ];then
+                find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
+            elif [ -f /usr/bin/md5sum ];then
+                find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" > /var/tmp/dwnldsum
+            fi
+            find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" >> /var/tmp/dwnldsum
+            cat /var/tmp/dwnldsum | sort > $TMPFILE1
+            rm /var/tmp/dwnldsum
 
-        #sort produces different result on different platforms, so we better re-sort before comparison
-        bzcat ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 | grep -v '/\._' | sort > $TMPFILE2
-        RESULT=`diff -q $TMPFILE1 $TMPFILE2`
-        rm $TMPFILE1 $TMPFILE2
-        rm -r $TDIR
+            #sort produces different result on different platforms, so we better re-sort before comparison
+            bzcat ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 | grep -v '/\._' | sort > $TMPFILE2
+            RESULT=`diff -q $TMPFILE1 $TMPFILE2`
+            rm $TMPFILE1 $TMPFILE2
+            rm -r $TDIR
 
-        if [ "x$RESULT" != "x" ];then
-            echo "$SRCNAME md5 checksum failed ($RESULT)"
+            if [ "x$RESULT" != "x" ];then
+                echo "$SRCNAME md5 checksum failed ($RESULT)"
+                rm ${SRCDBPREFIX}/src/$SRCNAME
+                OK=0
+            else
+                OK=1
+            fi
+        else
+            echo "checksum for ${SRCNAME} not found"
             rm ${SRCDBPREFIX}/src/$SRCNAME
             OK=0
-        else
-            OK=1
         fi
     fi
 }
@@ -256,69 +278,29 @@ if [ x$OPERATION = 'ximport' ];then
         /usr/bin/wget --no-check-certificate -O ${SRCDBPREFIX}/src/$SRCNAME $URL 
     fi
 
-    TDIR=`mktemp -dq /var/tmp/tmp.XXXXXX`
-    if [ $? -ne 0 ]; then
-        echo "srcdb: Can't create temp directory, exiting..."
-        exit 1
-    fi
-
-    TYPE=`file ${SRCDBPREFIX}/src/$SRCNAME | awk '{ print $2}' `
-
-    case $TYPE in
-        gzip)
-            zcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-        ;;
-        bzip2)
-            bzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-        ;;
-        xz|XZ)
-            xzcat ${SRCDBPREFIX}/src/$SRCNAME | tar -x --exclude '._*' -C $TDIR -f -
-        ;;
-        Zip)
-            unzip -q -d $TDIR ${SRCDBPREFIX}/src/$SRCNAME
-        ;;
-        *)
-            echo "Unrecognized compression format"
-            exit 1
-        ;;
-    esac;
-
-    if [ ! -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 ];then
-        echo "sum.md5.bz2 not found, creating..."
+    if [ ! -f ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5 ];then
+        echo "${SRCNAME}.md5 not found, creating..."
         if [ -f /sbin/md5 ];then
-            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" | sort > /var/tmp/srcdbsumcandidate
+            cat ${SRCDBPREFIX}/src/$SRCNAME | md5 > ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5
         elif [ -f /usr/bin/md5sum ];then
-            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" | sort > /var/tmp/srcdbsumcandidate
+            cat ${SRCDBPREFIX}/src/$SRCNAME | md5sum > ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5
         fi
-        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" | sort >> /var/tmp/srcdbsumcandidate
-        cat /var/tmp/srcdbsumcandidate | bzip2 > ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2
-        rm /var/tmp/srcdbsumcandidate
     else
-        echo "sum.md5.bz2 found, checking..."
-        TMPFILE1=`mktemp -q /var/tmp/srcdb.XXXXXX`
-        TMPFILE2=`mktemp -q /var/tmp/srcdb.XXXXXX`
+        echo "${SRCNAME}.md5 found, checking..."
 
         if [ -f /sbin/md5 ];then
-            find $TDIR/* ! -type d ! -type l -exec md5 {} ';' | sed -e "s@$TDIR@.@" | sort > /var/tmp/dwnldsum
+            SUM1=`cat ${SRCDBPREFIX}/src/$SRCNAME | md5`
         elif [ -f /usr/bin/md5sum ];then
-            find $TDIR/* ! -type d ! -type l -exec md5sum {} ';' | sed -e "s/  /%@/" | awk -F %@ '{print "MD5 ("$2") = "$1}' | sed -e "s@$TDIR@.@" | sort > /var/tmp/dwnldsum
+            SUM1=`cat ${SRCDBPREFIX}/src/$SRCNAME | md5sum`
         fi
-        find $TDIR/* -type l -exec ls -l {} ';' | sed -e "s@^.*$TDIR@.@" | sort >> /var/tmp/dwnldsum
-        cat /var/tmp/dwnldsum | sort > $TMPFILE1
-        rm /var/tmp/dwnldsum
+        SUM2=`cat ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.md5`
 
-        #sort produces different result on different platforms, so we better re-sort before comparison
-        bzcat ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 | grep -v '/\._' | sort > $TMPFILE2
-        RESULT=`diff -q $TMPFILE2 $TMPFILE1`
-        rm $TMPFILE1 $TMPFILE2
-
-        if [ "x$RESULT" != "x" ];then
-            echo "$SRCNAME md5 checksum failed ($RESULT)"
+        if [ "x$SUM1" != "x$SUM2" ];then
+            echo "$SRCNAME md5 checksum failed"
             exit 1
         fi;
     fi
 
-    rm -r $TDIR
     [ x$KEEPSRC = x1 ] || rm ${SRCDBPREFIX}/src/$SRCNAME
 
     echo $URL >> ${SRCDBPREFIX}/db/$NAME/$VER/${SRCNAME}.url
@@ -340,10 +322,6 @@ elif [ x$OPERATION = 'xdownload' ];then
 
     if [ ! -d ${SRCDBPREFIX}/db/$NAME/$VER ];then
         echo "$NAME-$VER not found (try importing $NAME-$VER first)"
-        exit 1
-    fi
-    if [ ! -f ${SRCDBPREFIX}/db/$NAME/$VER/sum.md5.bz2 ];then
-        echo "sum.md5.bz2 for $NAME-$VER not found (try importing $NAME-$VER first)"
         exit 1
     fi
 
