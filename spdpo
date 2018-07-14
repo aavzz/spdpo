@@ -1005,7 +1005,7 @@ echo -e "${_y}//////// $NAME-$VER-$_ed: trimmed${_n}"
 
 if [ -f $PATCHDIR/$NAME-$VER-$_ed.diff  ];then
     cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER-$_ed.diff"
-    echo -e "${_y}//////// $NAME-$VER-$_ed: patch applied${_n}"
+    echo -e "${_y}//////// $NAME-$VER-$_ed: patch ${_ed} applied${_n}"
     [ $DEBUG = 1 ] && read N
 fi
 
@@ -1034,7 +1034,7 @@ while : ;
 do
     if [ -f $PATCHDIR/$NAME-$VER-$_ed.diff_${i}  ];then
         cd ${CHROOT}-$_ed/$BDIR/$NAME-$VER && su $BUILDUSER -c "patch -p1 < $PATCHDIR/$NAME-$VER-$_ed.diff_${i}"
-        echo -e "${_y}//////// $NAME-$VER-$_ed: patch #${i} applied${_n}"
+        echo -e "${_y}//////// $NAME-$VER-$_ed: patch ${_ed} #${i} applied${_n}"
         [ $DEBUG = 1 ] && read N
         i=$(expr $i + 1)
     else
