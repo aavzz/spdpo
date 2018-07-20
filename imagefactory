@@ -55,21 +55,15 @@ create_install_CD() {
 
     # we need to rebuild some packages unconditionally
 
-    for n in $EDITIONS
+    for i in $ALWAYS_REBUILD
     do
-        for i in $ALWAYS_REBUILD
-        do
-            k=`find $BUNDLEDIR -name $i -type f | head -n 1`
-            if [ x$k != x ];then
-                j=`grep "^VER=" $k | head -n 1 | sed -e 's/VER=//'`
-                if [ ! -f /var/chroot/spdpo-$n/var/spool/spdpo/filelist/$i-$j-$n-${FLAVOUR} ];then
-                    spdpo -f ${FLAVOUR} $i || exit 1
-                fi
-            else
-                echo "specification file '$i' not found in $n"
-                exit 1
-            fi
-        done
+        k=`find $BUNDLEDIR -name $i -type f | head -n 1`
+        if [ x$k != x ];then
+            spdpo -f ${FLAVOUR} $i || exit 1
+        else
+            echo "specification file '$i' not found in $n"
+            exit 1
+        fi
     done
 
     # Create installer
